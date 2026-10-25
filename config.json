@@ -3,9 +3,9 @@
   "enumerators": ["ENU01", "ENU02", "ENU03", "ENU04", "ENU05", "ENU06", "ENU07", "ENU08", "ENU09", "ENU10"],
   "seed_master": "../qualtrics/MASTER_contacts_20261022.xlsx",
   "links": {
-    "main": "PASTE-MAIN-SURVEY-LINK",
-    "fu2": "PASTE-2-WEEK-SURVEY-LINK",
-    "fu4": "PASTE-4-WEEK-SURVEY-LINK"
+    "main": "https://kdischool.asia.qualtrics.com/jfe/form/SV_09uyLqGV9e3rFDU?Q_Language=UR",
+    "fu2": "https://kdischool.asia.qualtrics.com/jfe/form/SV_0x0nuagG2is0DkO?Q_Language=UR",
+    "fu4": "https://kdischool.asia.qualtrics.com/jfe/form/SV_a5bnKOKTeBRPp8W?Q_Language=UR"
   },
   "apps_script_url": "",
   "fu2_day": 14,
