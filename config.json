@@ -1,0 +1,15 @@
+{
+  "study_prefix": "SS",
+  "enumerators": ["ENU01", "ENU02", "ENU03", "ENU04", "ENU05", "ENU06", "ENU07", "ENU08", "ENU09", "ENU10"],
+  "seed_master": "../qualtrics/MASTER_contacts_20261022.xlsx",
+  "links": {
+    "main": "PASTE-MAIN-SURVEY-LINK",
+    "fu2": "PASTE-2-WEEK-SURVEY-LINK",
+    "fu4": "PASTE-4-WEEK-SURVEY-LINK"
+  },
+  "apps_script_url": "",
+  "fu2_day": 14,
+  "fu4_day": 28,
+  "window_days": 7,
+  "stall_days": 2
+}

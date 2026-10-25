@@ -1,0 +1,8 @@
+# NEVER publish participant data in readable form.
+# Only docs/ (the web page + encrypted data files) and the code go to GitHub.
+inputs/
+state/
+secrets/
+__pycache__/
+*.xlsx
+*.csv

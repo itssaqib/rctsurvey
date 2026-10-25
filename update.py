@@ -1,0 +1,488 @@
+"""SUNNI-SHIA RCT - fieldwork tracker update.
+
+Run:   python update.py            (from the tracker folder)
+Reads: inputs/*  (Qualtrics exports: registration, main survey recorded + in
+       progress, 2-week and 4-week follow-ups) and the call log.
+Keeps: state/people.csv  (phone -> participant_id + enumerator; never renumbered)
+Writes docs/data/<CODE>.json.enc  (one encrypted file per enumerator + ADMIN)
+       state/last_run.txt         (summary)
+New people are assigned automatically to the enumerator with the fewest people.
+"""
+import base64
+import glob
+import json
+import os
+import re
+import secrets
+import shutil
+import sys
+import urllib.request
+from datetime import date, datetime, timedelta
+
+import pandas as pd
+from cryptography.hazmat.primitives import hashes
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+CFG = json.load(open(os.path.join(HERE, "config.json"), encoding="utf-8"))
+ENUS = CFG["enumerators"]
+TODAY = date.today()
+P = lambda *a: os.path.join(HERE, *a)
+STATE = P("state", "people.csv")
+STATE_COLS = ["phone", "participant_id", "enumerator", "first_seen", "source",
+              "name", "gender", "age", "province", "district", "city"]
+PBKDF2_ITER = 200_000
+
+
+# ============================================================ helpers
+VALID_PREFIX = {f"03{i:02d}" for i in range(80)}
+
+
+def clean_phone(raw):
+    """03XXXXXXXXX or None (same rules as the master-file pipeline)."""
+    if raw is None or (isinstance(raw, float) and pd.isna(raw)):
+        return None
+    s = str(raw).strip()
+    if not s or s.lower() == "nan":
+        return None
+    s = s.translate(str.maketrans("۰۱۲۳۴۵۶۷۸۹"
+                                  "٠١٢٣٤٥٦٧٨٩",
+                                  "01234567890123456789"))
+    if re.fullmatch(r"\d+\.0", s):
+        s = s[:-2]
+    s = s.replace("O", "0").replace("o", "0")
+    s = re.sub(r"(?<=\d)[lI](?=\d)", "1", s)
+    parts = [p for p in re.split(r"[,/;]|\bor\b|\band\b", s) if re.search(r"\d", p)]
+    if not parts:
+        return None
+    d = re.sub(r"\D", "", parts[0])
+    if d.startswith("0092"):
+        d = d[4:]
+    elif d.startswith("00"):
+        d = d[2:]
+    elif d.startswith("92") and len(d) >= 12:
+        d = d[2:]
+    if d.startswith("3") and len(d) >= 10:
+        d = "0" + d
+    if d.startswith("003"):
+        d = d[1:]
+    if len(d) > 11 and d.startswith("03"):
+        d = d[:11]
+    return d if len(d) == 11 and d[:4] in VALID_PREFIX else None
+
+
+def luhn_digit(base):
+    t = 0
+    for i, ch in enumerate(reversed(base)):
+        x = int(ch)
+        if i % 2 == 0:
+            x *= 2
+            if x > 9:
+                x -= 9
+        t += x
+    return str((10 - t % 10) % 10)
+
+
+def eng(v):
+    """'مرد (Male)' -> 'Male'."""
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    v = str(v).strip()
+    m = re.search(r"\(([^()]*)\)\s*$", v)
+    return m.group(1).strip() if m else v
+
+
+def tidy(v):
+    if v is None or (isinstance(v, float) and pd.isna(v)):
+        return ""
+    v = re.sub(r"\s+", " ", str(v)).strip()
+    return v.title() if v.isascii() else v
+
+
+def val(row, col):
+    v = row.get(col) if hasattr(row, "get") else None
+    return None if v is None or (isinstance(v, float) and pd.isna(v)) or str(v).strip() == "" else str(v).strip()
+
+
+def to_dt(v):
+    try:
+        return pd.to_datetime(v, format="mixed")
+    except (ValueError, TypeError):
+        return pd.NaT
+
+
+def read_export(path):
+    """Qualtrics export -> data rows. CSV has 3 header rows, xlsx 2 (row 2 = question text)."""
+    if path.lower().endswith(".csv"):
+        df = pd.read_csv(path, dtype=str, encoding="utf-8-sig")
+    else:
+        df = pd.read_excel(path, dtype=str)
+    skip = 1
+    if len(df) > 1 and str(df.iloc[1, 0]).startswith('{"ImportId"'):
+        skip = 2
+    df = df.iloc[skip:].reset_index(drop=True)
+    if "Status" in df:
+        df = df[~df.Status.isin(["Survey Preview", "Survey Test", "Spam", "Imported"])]
+    return df
+
+
+def kind_of(df, name):
+    cols = set(df.columns)
+    if "fu_mobile" in cols:
+        if "wave" in cols and df.wave.dropna().astype(str).str.strip().isin(["2", "4"]).any():
+            return "fu" + df.wave.dropna().astype(str).str.strip().mode().iloc[0]
+        return "fu4" if "4week" in name.replace(" ", "").lower() else "fu2"
+    if "b_trust_own" in cols or "pv_trust_opp" in cols:
+        return "main"
+    if "mobile_whatsapp" in cols:
+        return "reg"
+    return None
+
+
+# ============================================================ passphrases
+WORDS = ("apple river stone cloud mango tiger lemon green bread chair horse light paper water ocean"
+         " sugar candle silver garden pencil rocket window market bottle castle forest jacket ladder"
+         " mirror needle orange parrot pepper pillow planet rabbit saddle shadow spider summer table"
+         " tomato tunnel wallet winter yellow anchor basket bridge camera cotton desert dragon engine"
+         " falcon finger flower guitar hammer island kettle lizard magnet meadow monkey number pocket"
+         " puzzle rainbow saturn sparrow statue thunder ticket turtle velvet violet walnut whistle zebra"
+         " button cherry cookie copper dolphin feather galaxy ginger harbor helmet lantern melon nectar"
+         " olive pebble pirate quartz ribbon rubber salmon spoon tulip umbrella valley wagon yogurt").split()
+
+
+def make_secrets():
+    path = P("secrets", "passphrases.json")
+    if os.path.exists(path):
+        out = json.load(open(path, encoding="utf-8"))
+        write_tokens(out)
+        return out
+    rnd = secrets.SystemRandom()
+    out = {}
+    for code in ENUS + ["ADMIN"]:
+        words = "-".join(rnd.choice(WORDS) for _ in range(4)) + f"-{rnd.randint(10, 99)}"
+        out[code] = {"passphrase": words, "log_token": secrets.token_urlsafe(18)}
+    json.dump(out, open(path, "w", encoding="utf-8"), indent=2)
+    write_tokens(out)
+    print("NEW passphrases written to secrets/passphrases.json - give each enumerator only their own.")
+    return out
+
+
+def write_tokens(sec):
+    """Tokens only (no passphrases) - paste into the Apps Script property TOKENS."""
+    json.dump({c: v["log_token"] for c, v in sec.items()},
+              open(P("secrets", "apps_script_tokens.json"), "w", encoding="utf-8"))
+
+
+def encrypt(obj, passphrase):
+    salt, iv = os.urandom(16), os.urandom(12)
+    key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=salt, iterations=PBKDF2_ITER).derive(
+        passphrase.encode("utf-8"))
+    ct = AESGCM(key).encrypt(iv, json.dumps(obj, ensure_ascii=False).encode("utf-8"), None)
+    b64 = lambda b: base64.b64encode(b).decode("ascii")
+    return {"v": 1, "kdf": "PBKDF2-SHA256", "iter": PBKDF2_ITER, "salt": b64(salt), "iv": b64(iv), "ct": b64(ct)}
+
+
+# ============================================================ state (stable IDs + assignment)
+def load_state():
+    if os.path.exists(STATE):
+        return pd.read_csv(STATE, dtype=str, keep_default_na=False)
+    # first run: seed from the 22 Oct master; ENU11 people are shared out equally
+    seed = pd.read_excel(P(CFG["seed_master"]), sheet_name="contacts", dtype=str).fillna("")
+    s = pd.DataFrame({"phone": seed.phone, "participant_id": seed.participant_id, "enumerator": seed.enumerator,
+                      "first_seen": seed.registration_date.where(seed.registration_date != "", seed.main_survey_date),
+                      "source": seed.source, "name": seed.name, "gender": seed.gender, "age": seed.age,
+                      "province": seed.province, "district": seed.district, "city": seed.city_village})
+    load = s[s.enumerator.isin(ENUS)].enumerator.value_counts().reindex(ENUS, fill_value=0).to_dict()
+    for i in s[~s.enumerator.isin(ENUS)].sort_values(["first_seen", "participant_id"]).index:
+        e = min(ENUS, key=lambda c: (load[c], c))
+        s.at[i, "enumerator"] = e
+        load[e] += 1
+    print("First run: seeded", len(s), "people from", CFG["seed_master"], "and shared ENU11 people equally.")
+    return s[STATE_COLS]
+
+
+# ============================================================ main
+def main():
+    sec = make_secrets()
+    state = load_state()
+    known = dict(zip(state.phone, state.index))
+
+    files = sorted(glob.glob(P("inputs", "*.xlsx")) + glob.glob(P("inputs", "*.csv")))
+    data = {"reg": [], "main": [], "fu2": [], "fu4": []}
+    for f in files:
+        if os.path.basename(f).lower().startswith("call_log"):
+            continue
+        df = read_export(f)
+        k = kind_of(df, os.path.basename(f))
+        if k:
+            data[k].append(df)
+            print(f"  read {k:4s} {len(df):6d} rows  {os.path.basename(f)}")
+    cat = {k: (pd.concat(v, ignore_index=True).drop_duplicates("ResponseId", keep="last") if v else pd.DataFrame())
+           for k, v in data.items()}
+    if cat["main"].empty and cat["reg"].empty:
+        sys.exit("No Qualtrics exports found in inputs/.")
+
+    new_people = []
+
+    def person_for(phones, first_seen, profile, source):
+        """Return the state index for the first known phone; otherwise queue a new person."""
+        phones = [p for p in phones if p]
+        for p in phones:
+            if p in known:
+                return known[p]
+        if not phones:
+            return None
+        p = phones[0]
+        idx = f"new{len(new_people)}"
+        known[p] = idx
+        new_people.append(dict(phone=p, first_seen=str(first_seen)[:19], source=source, **profile, _idx=idx))
+        return idx
+
+    # ---------------- registration
+    reg_profile = {}
+    for _, r in cat["reg"].iterrows():
+        ph = clean_phone(val(r, "mobile_whatsapp"))
+        prof = dict(name=tidy(val(r, "name")), gender=eng(val(r, "gender")), age=val(r, "age") or "",
+                    province=eng(val(r, "province")), district=tidy(val(r, "district")),
+                    city=tidy(val(r, "city_village")))
+        i = person_for([ph], val(r, "StartDate"), prof, "Registration")
+        if i is not None:
+            reg_profile.setdefault(i, prof)
+
+    # ---------------- main survey (recorded + in progress)
+    main = {}
+    timers = [c for c in cat["main"].columns if str(c).startswith("timer_Page Submit")]
+    for _, r in cat["main"].iterrows():
+        phones = [clean_phone(val(r, c)) for c in ("mobile", "ExternalReference", "mobile.1")]
+        prof = dict(name=tidy(val(r, "name")), gender=eng(val(r, "gender")), age=val(r, "age") or "",
+                    province=eng(val(r, "province")), district=tidy(val(r, "district")),
+                    city=tidy(val(r, "cityvillage")))
+        i = person_for(phones, val(r, "StartDate"), prof, "Main survey (not registered)")
+        if i is None:
+            continue
+        finished = str(val(r, "Finished")).lower() in ("true", "1")
+        rid = val(r, "ResponseId") or ""
+        consent = val(r, "consent")
+        st = ("completed" if finished and consent != "No" else "declined" if consent == "No"
+              else "in_progress" if rid.startswith("FS_") else "stopped")
+        rec = dict(status=st, progress=int(float(val(r, "Progress") or 0)), start=to_dt(val(r, "StartDate")),
+                   end=to_dt(val(r, "EndDate")) if finished else pd.NaT,
+                   video=any(val(r, c) for c in timers), consent=consent)
+        main.setdefault(i, []).append(rec)
+        if i not in reg_profile and prof["name"]:
+            reg_profile.setdefault(i, prof)
+
+    # ---------------- follow-ups
+    fu = {"fu2": {}, "fu4": {}}
+    for w in ("fu2", "fu4"):
+        for _, r in cat[w].iterrows():
+            ph = clean_phone(val(r, "fu_mobile"))
+            if not ph:
+                continue
+            i = known.get(ph)
+            if i is None:      # follow-up from a number we have never seen: keep it visible to admin
+                i = person_for([ph], val(r, "StartDate"), dict(name=tidy(val(r, "fu_name")), gender="", age="",
+                               province="", district="", city=""), f"{w} only (number not recognised)")
+            done = str(val(r, "Finished")).lower() in ("true", "1") and val(r, "fu_consent") != "No"
+            prev = fu[w].get(i)
+            rec = dict(done=done, date=to_dt(val(r, "EndDate" if done else "StartDate")),
+                       progress=int(float(val(r, "Progress") or 0)))
+            if prev is None or (rec["done"] and not prev["done"]):
+                fu[w][i] = rec
+
+    # ---------------- assign new people (IDs continue the sequence; fewest-people enumerator)
+    if new_people:
+        load = state.enumerator.value_counts().reindex(ENUS, fill_value=0).to_dict()
+        seq = int(state.participant_id.str[:5].astype(int).max())
+        rows = []
+        for n in sorted(new_people, key=lambda x: (x["first_seen"], x["phone"])):
+            seq += 1
+            e = min(ENUS, key=lambda c: (load[c], c))
+            load[e] += 1
+            n2 = {k: n.get(k, "") for k in STATE_COLS}
+            n2.update(participant_id=str(seq) + luhn_digit(str(seq)), enumerator=e)
+            rows.append((n["_idx"], n2))
+        add = pd.DataFrame([r for _, r in rows])
+        start = len(state)
+        state = pd.concat([state, add], ignore_index=True)
+        remap = {old: start + k for k, (old, _) in enumerate(rows)}
+        for d in (reg_profile, main, fu["fu2"], fu["fu4"]):
+            for old, new in list(remap.items()):
+                if old in d:
+                    d[new] = d.pop(old)
+    assert state.phone.is_unique and state.participant_id.is_unique
+    # profile refresh from the latest registration / survey answers (never touches ID or enumerator)
+    for i, prof in reg_profile.items():
+        for k, v in prof.items():
+            if v and not state.at[i, k]:
+                state.at[i, k] = v
+
+    # ---------------- call log
+    logs = load_call_log(sec)
+
+    # ---------------- statuses
+    people = []
+    for i, s in state.iterrows():
+        people.append(build_person(i, s, main.get(i, []), fu["fu2"].get(i), fu["fu4"].get(i),
+                                   logs.get(s.participant_id, [])))
+
+    # ---------------- save state (backup first)
+    if os.path.exists(STATE):
+        shutil.copy(STATE, STATE.replace(".csv", f"_backup_{datetime.now():%Y%m%d_%H%M%S}.csv"))
+    state[STATE_COLS].to_csv(STATE, index=False, encoding="utf-8-sig")
+
+    # ---------------- publish encrypted files
+    gen = datetime.now().strftime("%Y-%m-%d %H:%M")
+    public = {"links": CFG["links"], "apps_script_url": CFG["apps_script_url"], "generated": gen,
+              "fu2_day": CFG["fu2_day"], "fu4_day": CFG["fu4_day"]}
+    hidden_admin = ("age", "under_18", "gender")
+    for e in ENUS:
+        mine = [{k: v for k, v in p.items() if k not in hidden_admin} for p in people if p["enumerator"] == e]
+        obj = dict(public, role="enumerator", code=e, log_token=sec[e]["log_token"], people=mine)
+        json.dump(encrypt(obj, sec[e]["passphrase"]), open(P("docs", "data", f"{e}.json.enc"), "w"))
+    adm = dict(public, role="admin", code="ADMIN", log_token=sec["ADMIN"]["log_token"], people=people,
+               enumerators=ENUS)
+    json.dump(encrypt(adm, sec["ADMIN"]["passphrase"]), open(P("docs", "data", "ADMIN.json.enc"), "w"))
+    json.dump({"generated": gen}, open(P("docs", "data", "version.json"), "w"))
+
+    # ---------------- summary
+    df = pd.DataFrame(people)
+    lines = [f"Tracker update {gen}", f"People: {len(df)}  (new this run: {len(new_people)})",
+             "Main survey: " + ", ".join(f"{k} {v}" for k, v in df.main_status.value_counts().items()),
+             "2-week: " + ", ".join(f"{k} {v}" for k, v in df.fu2_status.value_counts().items()),
+             "4-week: " + ", ".join(f"{k} {v}" for k, v in df.fu4_status.value_counts().items()),
+             f"Call today (all enumerators): {int(df.call_today.sum())}",
+             f"Call-log entries read: {sum(len(v) for v in logs.values())}", "",
+             "Per enumerator: people / completed / call today"]
+    for e in ENUS:
+        d = df[df.enumerator == e]
+        lines.append(f"  {e}: {len(d):5d} / {int((d.main_status == 'completed').sum()):4d} / {int(d.call_today.sum()):4d}")
+    open(P("state", "last_run.txt"), "w", encoding="utf-8").write("\n".join(lines))
+    print("\n".join(lines))
+    print("\nNext: commit and push the docs/ folder (see README.md).")
+
+
+def load_call_log(sec):
+    rows = []
+    url = CFG.get("apps_script_url")
+    if url:
+        try:
+            q = f"{url}?action=export&token={sec['ADMIN']['log_token']}"
+            with urllib.request.urlopen(q, timeout=60) as resp:
+                rows = json.loads(resp.read().decode("utf-8")).get("rows", [])
+            print(f"  read call log from Google Sheet: {len(rows)} entries")
+        except Exception as ex:  # keep working offline
+            print("  WARNING: could not read the online call log:", ex)
+    for f in glob.glob(P("inputs", "call_log*.csv")):
+        rows += pd.read_csv(f, dtype=str, keep_default_na=False).to_dict("records")
+    out, seen = {}, set()
+    valid = {c: sec[c]["log_token"] for c in sec}
+    for r in rows:
+        lid = r.get("log_id") or ""
+        if lid in seen:
+            continue
+        seen.add(lid)
+        code = r.get("enumerator", "")
+        if valid.get(code) != r.get("token") and "token" in r:
+            continue      # entries with a wrong token are ignored
+        out.setdefault(str(r.get("participant_id", "")), []).append(
+            {k: r.get(k, "") for k in ("log_id", "time", "enumerator", "action", "outcome", "tags", "note", "next_call")})
+    for v in out.values():
+        v.sort(key=lambda x: x["time"])
+    return out
+
+
+def build_person(i, s, mains, fu2, fu4, logs):
+    fmt = lambda t: "" if t is None or pd.isna(t) else pd.Timestamp(t).strftime("%Y-%m-%d")
+    # ---- main survey: best attempt
+    rank = {"completed": 4, "in_progress": 3, "stopped": 2, "declined": 1}
+    if mains:
+        # an in-progress copy is stale once the same attempt (same start time) appears as closed
+        closed_starts = {str(m["start"])[:19] for m in mains if m["status"] != "in_progress"}
+        live = [m for m in mains if not (m["status"] == "in_progress" and str(m["start"])[:19] in closed_starts)]
+        mains = live or mains
+        done_any = [m for m in mains if m["status"] == "completed"]
+        if done_any:
+            best = max(done_any, key=lambda m: m["progress"])
+        else:   # otherwise the most recent attempt tells the current state
+            best = max(mains, key=lambda m: (m["start"] if not pd.isna(m["start"]) else pd.Timestamp.min,
+                                              rank[m["status"]]))
+        main_status = best["status"]
+        consent_yes = any(m["consent"] == "Yes" for m in mains)
+        if main_status == "declined" and consent_yes:
+            main_status = "stopped"
+        video_seen = any(m["video"] for m in mains)
+        done_dates = [m["end"] for m in mains if m["status"] == "completed" and not pd.isna(m["end"])]
+        main_done = min(done_dates) if done_dates else None
+        last_start = max((m["start"] for m in mains if not pd.isna(m["start"])), default=None)
+        progress = max(m["progress"] for m in mains)
+        n_completed = sum(m["status"] == "completed" for m in mains)
+    else:
+        main_status, video_seen, main_done, last_start, progress, n_completed = "not_started", False, None, None, 0, 0
+
+    # ---- follow-up windows
+    def wave(rec, day):
+        if main_done is None:
+            return "not_eligible", ""
+        due = (pd.Timestamp(main_done) + timedelta(days=day)).date()
+        if rec and rec["done"]:
+            return "done", fmt(rec["date"])
+        if TODAY < due:
+            return "not_yet", due.isoformat()
+        if rec:
+            return ("started", due.isoformat())
+        return ("overdue" if TODAY >= due + timedelta(days=CFG["window_days"]) else "due"), due.isoformat()
+
+    fu2_status, fu2_due = wave(fu2, CFG["fu2_day"])
+    fu4_status, fu4_due = wave(fu4, CFG["fu4_day"])
+    # ---- calls
+    last = logs[-1] if logs else None
+    tags = sorted({t.strip() for l in logs for t in str(l.get("tags", "")).split(",") if t.strip()})
+    paid = any(l.get("outcome") == "paid" for l in logs)
+    refused = bool(last and last.get("outcome") == "refused") or "refused" in tags
+    wrong = "wrong_number" in tags
+    # ---- next action
+    stall = last_start is not None and (TODAY - pd.Timestamp(last_start).date()).days >= CFG["stall_days"]
+    if main_status == "declined":
+        action, link = "do_not_contact", ""
+    elif refused:
+        action, link = "do_not_contact", ""
+    elif main_status == "not_started":
+        action, link = "main_invite", "main"
+    elif main_status in ("in_progress", "stopped") and video_seen:
+        action, link = "no_restart", ""            # already shown a video: a restart would re-randomise
+    elif main_status in ("in_progress", "stopped"):
+        action, link = ("main_remind" if stall or main_status == "stopped" else "wait_main"), "main"
+    elif fu4_status in ("due", "overdue", "started"):
+        action, link = "fu4", "fu4"
+    elif fu2_status in ("due", "overdue", "started") and fu4_status == "not_yet":
+        action, link = "fu2", "fu2"
+    elif fu2_status == "done" and fu4_status == "done":
+        action, link = ("payment_done" if paid else "payment_due"), ""
+    else:
+        action, link = "wait_followup", ""
+    next_call = (last or {}).get("next_call", "") or ""
+    actionable = action in ("main_invite", "main_remind", "fu2", "fu4")
+    called_today = bool(last and str(last.get("time", ""))[:10] == TODAY.isoformat())
+    call_today = (actionable and not wrong and not called_today and (not next_call or next_call <= TODAY.isoformat()))
+    try:
+        age = int(float(s.age))
+    except (TypeError, ValueError):
+        age = None
+    return {
+        "pid": s.participant_id, "enumerator": s.enumerator, "name": s["name"] or "",
+        "phone": s.phone, "district": s.district or "", "province": s.province or "", "city": s.city or "",
+        "source": s.source, "first_seen": str(s.first_seen)[:10],
+        "main_status": main_status, "main_progress": progress, "main_done": fmt(main_done),
+        "main_last_start": fmt(last_start), "video_seen": bool(video_seen), "n_completed": n_completed,
+        "fu2_status": fu2_status, "fu2_due": fu2_due, "fu4_status": fu4_status, "fu4_due": fu4_due,
+        "action": action, "link": link, "call_today": bool(call_today), "next_call": next_call,
+        "tags": tags, "calls": logs[-6:], "n_calls": len(logs), "paid": paid,
+        "age": "" if age is None else age, "under_18": "" if age is None else ("Yes" if age < 18 else "No"),
+        "gender": s.gender or "",
+    }
+
+
+if __name__ == "__main__":
+    main()

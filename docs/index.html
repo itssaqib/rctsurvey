@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Fieldwork Tracker</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="app">
+  <!-- LOGIN -->
+  <section id="login" class="login">
+    <div class="login-card">
+      <div class="brand">
+        <div class="logo">SS</div>
+        <div>
+          <h1 data-t="title">Fieldwork Tracker</h1>
+          <p class="muted" data-t="subtitle">Sunni–Shia study · participant follow-up</p>
+        </div>
+      </div>
+      <label class="field">
+        <span data-t="code">Your code</span>
+        <select id="codeSel"></select>
+      </label>
+      <label class="field">
+        <span data-t="passphrase">Passphrase</span>
+        <input id="pass" type="password" autocomplete="current-password" placeholder="word-word-word-word-00">
+      </label>
+      <label class="check"><input id="remember" type="checkbox"> <span data-t="remember">Remember on this phone</span></label>
+      <button id="loginBtn" class="btn primary wide" data-t="open">Open my list</button>
+      <p id="loginErr" class="err" hidden></p>
+      <div class="lang-row"><button class="link" data-lang-toggle>اردو</button></div>
+    </div>
+  </section>
+
+  <!-- MAIN -->
+  <section id="main" hidden>
+    <header class="top">
+      <div class="who">
+        <div class="logo sm">SS</div>
+        <div>
+          <div class="code" id="whoCode"></div>
+          <div class="muted small"><span data-t="updated">Updated</span> <span id="genTime"></span></div>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button class="btn ghost sm" data-lang-toggle>اردو</button>
+        <button class="btn ghost sm" id="logoutBtn" data-t="logout">Log out</button>
+      </div>
+    </header>
+
+    <div class="wrap">
+      <div id="stats" class="stats"></div>
+      <div id="adminPanel" hidden></div>
+
+      <div class="toolbar">
+        <input id="search" type="search" data-tp="search" placeholder="Search name, ID or phone">
+        <select id="tagSel"></select>
+        <select id="enuSel" hidden></select>
+      </div>
+      <div id="chips" class="chips"></div>
+      <div class="list-head">
+        <span id="count" class="muted small"></span>
+        <span class="list-actions">
+          <button class="link small" id="exportBtn" data-t="export">Download list (CSV)</button>
+          <button class="link small" id="exportLogsBtn" data-t="exportLogs">Download my unsent logs</button>
+        </span>
+      </div>
+      <div id="list" class="list"></div>
+      <button id="moreBtn" class="btn ghost wide" hidden data-t="more">Show more</button>
+    </div>
+  </section>
+
+  <!-- LOG DIALOG -->
+  <dialog id="logDlg">
+    <form method="dialog" id="logForm">
+      <h2 id="logTitle"></h2>
+      <p class="muted small" id="logSub"></p>
+      <label class="field"><span data-t="outcome">What happened?</span>
+        <select id="outcome" required></select>
+      </label>
+      <div class="field"><span data-t="tags">Tags</span><div id="tagPick" class="chips"></div></div>
+      <label class="field"><span data-t="nextCall">Next call date (optional)</span>
+        <input id="nextCall" type="date">
+      </label>
+      <label class="field"><span data-t="note">Note (optional)</span>
+        <textarea id="note" rows="2"></textarea>
+      </label>
+      <div class="dlg-actions">
+        <button value="cancel" class="btn ghost" data-t="cancel">Cancel</button>
+        <button id="saveLog" value="save" class="btn primary" data-t="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+  <div id="toast" class="toast" hidden></div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
