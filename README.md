@@ -79,10 +79,14 @@ Follow-ups: *Not yet due* → *Due* (from day 14 / day 28 after completion) →
 *Overdue* (7 days after due) → *Done*. After both are done: *Payment due* → log
 "Paid Rs 350" from the ADMIN login.
 
-**Next action rules.** Not started → send main link. Started, not finished → remind
-after 2 days — **unless a video was already shown** ("do not restart"), because a new
-attempt would re-randomise them to another video. Completed → 2-week, then 4-week
-follow-up. Refused or wrong number → removed from "Call today".
+**Next action rules.** Not started → send main link. In progress → after 2 days, remind
+them to reopen the link **on the same phone** (Qualtrics continues where they stopped).
+Stopped (closed) → ask them to fill the survey again from the start. This applies even
+if they already saw a video (team decision, 25 Oct, because of the low response rate).
+A new attempt re-randomises them, so ADMIN shows "Saw a video, not finished" and
+"Shown a video in more than one attempt": keep these people flagged in the analysis.
+Completed → 2-week, then 4-week follow-up. Refused or wrong number → removed from
+"Call today".
 
 ## Changing things
 

@@ -50,13 +50,15 @@ const STATUS = {
         started: "شروع کیا", done: "مکمل" },
 };
 const ACTION = {
-  en: { main_invite: "Send the main survey link and ask them to fill it", main_remind: "Remind to finish the main survey",
-        wait_main: "Main survey in progress — wait", no_restart: "Do NOT send the main link again (already saw a video)",
+  en: { main_invite: "Send the main survey link and ask them to fill it", main_remind: "Remind to finish the main survey (same phone continues where they stopped)",
+        main_restart: "Ask them to fill the main survey again (their earlier attempt closed)",
+        wait_main: "Main survey in progress — wait",
         fu2: "2-week follow-up: send link / call", fu4: "4-week follow-up: send link / call",
         wait_followup: "Waiting for the next follow-up", payment_due: "Both follow-ups done — payment due",
         payment_done: "All done and paid", do_not_contact: "Do not contact" },
-  ur: { main_invite: "مرکزی سروے کا لنک بھیجیں اور مکمل کرنے کا کہیں", main_remind: "مرکزی سروے مکمل کرنے کی یاد دہانی کرائیں",
-        wait_main: "مرکزی سروے جاری ہے — انتظار کریں", no_restart: "مرکزی لنک دوبارہ نہ بھیجیں (ویڈیو دیکھ چکے ہیں)",
+  ur: { main_invite: "مرکزی سروے کا لنک بھیجیں اور مکمل کرنے کا کہیں", main_remind: "مرکزی سروے مکمل کرنے کی یاد دہانی کرائیں (اسی فون پر وہیں سے جاری ہو گا)",
+        main_restart: "مرکزی سروے دوبارہ مکمل کرنے کا کہیں (پچھلی کوشش بند ہو چکی)",
+        wait_main: "مرکزی سروے جاری ہے — انتظار کریں",
         fu2: "2 ہفتے کا فالو اپ: لنک بھیجیں / کال کریں", fu4: "4 ہفتے کا فالو اپ: لنک بھیجیں / کال کریں",
         wait_followup: "اگلے فالو اپ کا انتظار", payment_due: "دونوں فالو اپ مکمل — ادائیگی باقی",
         payment_done: "سب مکمل اور ادائیگی ہو گئی", do_not_contact: "رابطہ نہ کریں" },
@@ -81,7 +83,8 @@ const TAGS = [
 ];
 const MSG = {
   main_invite: "السلام علیکم {name}! آپ نے ہماری تحقیق کے لیے رجسٹریشن کروائی تھی۔ براہِ کرم یہ مختصر سروے مکمل کریں: {link}\nسروے میں اپنا یہی موبائل نمبر لکھیں: {phone}\nسروے اور دو مختصر فالو اپ مکمل کرنے پر آپ کو 350 روپے جاز کیش یا ایزی پیسہ کے ذریعے ملیں گے۔ شکریہ",
-  main_remind: "السلام علیکم {name}! آپ نے ہمارا سروے شروع کیا تھا لیکن وہ ابھی مکمل نہیں ہوا۔ براہِ کرم اسے مکمل کریں: {link}\nاپنا موبائل نمبر اس طرح لکھیں: {phone}\nشکریہ",
+  main_remind: "السلام علیکم {name}! آپ نے ہمارا سروے شروع کیا تھا لیکن وہ ابھی مکمل نہیں ہوا۔ براہِ کرم اسی فون پر یہ لنک کھولیں، سروے وہیں سے شروع ہو گا جہاں آپ نے چھوڑا تھا: {link}\nاگر سروے شروع سے کھلے تو اپنا موبائل نمبر اس طرح لکھیں: {phone}\nمکمل کرنے پر آپ کو 350 روپے ملیں گے۔ شکریہ",
+  main_restart: "السلام علیکم {name}! آپ کا پچھلا سروے مکمل نہیں ہوا تھا اور اب بند ہو چکا ہے۔ براہِ کرم یہ لنک کھول کر سروے دوبارہ شروع سے مکمل کریں: {link}\nاپنا موبائل نمبر اس طرح لکھیں: {phone}\nمکمل کرنے پر آپ کو 350 روپے ملیں گے۔ شکریہ",
   fu2: "السلام علیکم {name}! ہمارے سروے میں حصہ لینے کا شکریہ۔ اب دو ہفتے بعد کا مختصر فالو اپ سروے حاضر ہے (تقریباً 10 منٹ): {link}\nاپنا موبائل نمبر اس طرح لکھیں: {phone}\nشکریہ",
   fu4: "السلام علیکم {name}! یہ ہمارا آخری مختصر فالو اپ سروے ہے (تقریباً 10 منٹ): {link}\nاپنا موبائل نمبر اس طرح لکھیں: {phone}\nمکمل کرنے پر آپ کو 350 روپے بھیجے جائیں گے۔ شکریہ",
 };
@@ -95,7 +98,7 @@ const FILTERS = [
   ["fu4", (p) => ["due", "overdue", "started"].includes(p.fu4_status), "4-week due", "4 ہفتے باقی"],
   ["fu_done", (p) => p.fu2_status === "done" || p.fu4_status === "done", "Follow-up done", "فالو اپ مکمل"],
   ["payment", (p) => p.action === "payment_due", "Payment due", "ادائیگی باقی"],
-  ["dnc", (p) => ["do_not_contact", "no_restart"].includes(p.action), "Do not contact / no restart", "رابطہ نہیں / دوبارہ نہیں"],
+  ["dnc", (p) => p.action === "do_not_contact", "Do not contact", "رابطہ نہ کریں"],
 ];
 
 /* ---------------------------------------------------------------- state */
@@ -235,7 +238,8 @@ function renderAdmin() {
   const flags = [
     ["Under 18", D.people.filter((p) => p.under_18 === "Yes").length],
     ["Completed main survey twice (pay once)", D.people.filter((p) => p.n_completed > 1).length],
-    ["Saw a video but did not finish (do not restart)", D.people.filter((p) => p.action === "no_restart").length],
+    ["Saw a video, not finished: a restart re-randomises (flag in analysis)", D.people.filter((p) => p.video_seen && p.main_status !== "completed").length],
+    ["Shown a video in more than one attempt", D.people.filter((p) => p.n_video_attempts > 1).length],
     ["Declined consent / refused", D.people.filter((p) => p.action === "do_not_contact").length],
     ["Follow-up from an unknown number", D.people.filter((p) => String(p.source).includes("not recognised")).length],
     ["Payment due", D.people.filter((p) => p.action === "payment_due").length],
@@ -255,7 +259,7 @@ function filtered() {
   const f = (FILTERS.find((x) => x[0] === filter) || FILTERS[1])[1];
   const q = $("#search").value.trim().toLowerCase();
   const tag = $("#tagSel").value;
-  const rank = { fu4: 0, fu2: 1, main_remind: 2, main_invite: 3, payment_due: 4 };
+  const rank = { fu4: 0, fu2: 1, main_remind: 2, main_restart: 2, main_invite: 3, payment_due: 4 };
   return base().filter(f)
     .filter((p) => !tag || (p.tags || []).includes(tag) || pending().some((l) => l.participant_id === p.pid && (l.tags || "").includes(tag)))
     .filter((p) => !q || `${p.name} ${p.pid} ${p.phone}`.toLowerCase().includes(q))
@@ -269,7 +273,7 @@ function badge(label, s, extra = "") {
   return `<span class="b ${tone(s)}">${label}: ${STATUS[lang][s] || s}${extra}</span>`;
 }
 function waLink(p) {
-  const tpl = MSG[p.action] || (p.link ? MSG[p.link === "main" ? "main_remind" : p.link] : "");
+  const tpl = MSG[p.action] || (p.link ? MSG[p.link === "main" ? (p.main_status === "stopped" ? "main_restart" : "main_remind") : p.link] : "");
   const link = (D.links || {})[p.link] || "";
   const text = tpl ? tpl.replace("{name}", p.name || "").replace("{link}", link).replace("{phone}", p.phone) : "";
   return `https://wa.me/92${p.phone.slice(1)}${text ? "?text=" + encodeURIComponent(text) : ""}`;
@@ -285,7 +289,7 @@ function renderList() {
     const prog = ["in_progress", "stopped"].includes(p.main_status) ? ` ${p.main_progress}%` : "";
     const due2 = ["due", "overdue", "not_yet", "started"].includes(p.fu2_status) ? ` · ${p.fu2_due}` : "";
     const due4 = ["due", "overdue", "not_yet", "started"].includes(p.fu4_status) ? ` · ${p.fu4_due}` : "";
-    const canMsg = !["do_not_contact", "no_restart"].includes(p.action);
+    const canMsg = p.action !== "do_not_contact";
     const tags = [...new Set([...(p.tags || []), ...logs.filter((l) => l._pending).flatMap((l) => String(l.tags || "").split(",").filter(Boolean))])];
     return `<article class="card ${p.call_today ? "today" : ""}">
       <div class="row1"><span class="nm">${esc(p.name) || "—"}</span>

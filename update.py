@@ -336,7 +336,7 @@ def main():
     gen = datetime.now().strftime("%Y-%m-%d %H:%M")
     public = {"links": CFG["links"], "apps_script_url": CFG["apps_script_url"], "generated": gen,
               "fu2_day": CFG["fu2_day"], "fu4_day": CFG["fu4_day"]}
-    hidden_admin = ("age", "under_18", "gender")
+    hidden_admin = ("age", "under_18", "gender", "video_seen", "n_video_attempts")
     for e in ENUS:
         mine = [{k: v for k, v in p.items() if k not in hidden_admin} for p in people if p["enumerator"] == e]
         obj = dict(public, role="enumerator", code=e, log_token=sec[e]["log_token"], people=mine)
@@ -413,6 +413,7 @@ def build_person(i, s, mains, fu2, fu4, logs):
         if main_status == "declined" and consent_yes:
             main_status = "stopped"
         video_seen = any(m["video"] for m in mains)
+        n_video = sum(bool(m["video"]) for m in mains)
         done_dates = [m["end"] for m in mains if m["status"] == "completed" and not pd.isna(m["end"])]
         main_done = min(done_dates) if done_dates else None
         last_start = max((m["start"] for m in mains if not pd.isna(m["start"])), default=None)
@@ -420,6 +421,7 @@ def build_person(i, s, mains, fu2, fu4, logs):
         n_completed = sum(m["status"] == "completed" for m in mains)
     else:
         main_status, video_seen, main_done, last_start, progress, n_completed = "not_started", False, None, None, 0, 0
+        n_video = 0
 
     # ---- follow-up windows
     def wave(rec, day):
@@ -450,10 +452,13 @@ def build_person(i, s, mains, fu2, fu4, logs):
         action, link = "do_not_contact", ""
     elif main_status == "not_started":
         action, link = "main_invite", "main"
-    elif main_status in ("in_progress", "stopped") and video_seen:
-        action, link = "no_restart", ""            # already shown a video: a restart would re-randomise
-    elif main_status in ("in_progress", "stopped"):
-        action, link = ("main_remind" if stall or main_status == "stopped" else "wait_main"), "main"
+    # started but not finished: always follow up (PI decision 25 Oct, low response rate).
+    # In progress -> reopen the link on the same phone to continue; stopped (closed) -> start again.
+    # A restart after a video re-randomises the arm: flagged as video_seen / n_video_attempts for analysis.
+    elif main_status == "in_progress":
+        action, link = ("main_remind" if stall else "wait_main"), "main"
+    elif main_status == "stopped":
+        action, link = "main_restart", "main"
     elif fu4_status in ("due", "overdue", "started"):
         action, link = "fu4", "fu4"
     elif fu2_status in ("due", "overdue", "started") and fu4_status == "not_yet":
@@ -463,7 +468,7 @@ def build_person(i, s, mains, fu2, fu4, logs):
     else:
         action, link = "wait_followup", ""
     next_call = (last or {}).get("next_call", "") or ""
-    actionable = action in ("main_invite", "main_remind", "fu2", "fu4")
+    actionable = action in ("main_invite", "main_remind", "main_restart", "fu2", "fu4")
     called_today = bool(last and str(last.get("time", ""))[:10] == TODAY.isoformat())
     call_today = (actionable and not wrong and not called_today and (not next_call or next_call <= TODAY.isoformat()))
     try:
@@ -475,7 +480,7 @@ def build_person(i, s, mains, fu2, fu4, logs):
         "phone": s.phone, "district": s.district or "", "province": s.province or "", "city": s.city or "",
         "source": s.source, "first_seen": str(s.first_seen)[:10],
         "main_status": main_status, "main_progress": progress, "main_done": fmt(main_done),
-        "main_last_start": fmt(last_start), "video_seen": bool(video_seen), "n_completed": n_completed,
+        "main_last_start": fmt(last_start), "video_seen": bool(video_seen), "n_video_attempts": n_video, "n_completed": n_completed,
         "fu2_status": fu2_status, "fu2_due": fu2_due, "fu4_status": fu4_status, "fu4_due": fu4_due,
         "action": action, "link": link, "call_today": bool(call_today), "next_call": next_call,
         "tags": tags, "calls": logs[-6:], "n_calls": len(logs), "paid": paid,
