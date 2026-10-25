@@ -24,7 +24,10 @@ const T = {
     "Saved on this phone. It will be sent when you are online.", pending: "not yet in the update",
     main: "Main", w2: "2-week", w4: "4-week", due: "due", since: "since",
     stat_total: "My participants", stat_today: "Call today", stat_completed: "Main survey done",
-    stat_inprog: "Started, not finished", stat_fudue: "Follow-up due", stat_pay: "Payment due",
+    stat_inprog: "Started, no video yet", stat_fudue: "Follow-up due", stat_pay: "Payment due",
+    stat_full: "Full compliance (target)", stat_partial: "Partial compliance (saw video)",
+    stat_fu2done: "2-week done (full + partial)", stat_fu4done: "4-week done (full + partial)",
+    full: "Full compliance", partial: "Partial compliance",
   },
   ur: {
     title: "فیلڈ ورک ٹریکر", subtitle: "سنی–شیعہ تحقیق · شرکاء سے رابطہ", code: "آپ کا کوڈ",
@@ -38,14 +41,17 @@ const T = {
     "اس فون پر محفوظ ہے، انٹرنیٹ ملنے پر بھیج دیا جائے گا۔", pending: "ابھی اپ ڈیٹ میں شامل نہیں",
     main: "مرکزی سروے", w2: "2 ہفتے", w4: "4 ہفتے", due: "مقررہ", since: "سے",
     stat_total: "میرے شرکاء", stat_today: "آج کال کریں", stat_completed: "مرکزی سروے مکمل",
-    stat_inprog: "شروع، مکمل نہیں", stat_fudue: "فالو اپ باقی", stat_pay: "ادائیگی باقی",
+    stat_inprog: "شروع، ابھی ویڈیو نہیں", stat_fudue: "فالو اپ باقی", stat_pay: "ادائیگی باقی",
+    stat_full: "مکمل شرکت (ہدف)", stat_partial: "جزوی شرکت (ویڈیو دیکھی)",
+    stat_fu2done: "2 ہفتے مکمل (مکمل + جزوی)", stat_fu4done: "4 ہفتے مکمل (مکمل + جزوی)",
+    full: "مکمل شرکت", partial: "جزوی شرکت",
   },
 };
 const STATUS = {
-  en: { not_started: "Not started", in_progress: "In progress", stopped: "Stopped (closed)", completed: "Completed",
+  en: { not_started: "Not started", in_progress: "In progress", stopped: "Stopped (closed)", completed: "Completed", partial: "Saw video, not finished",
         declined: "Declined consent", not_eligible: "—", not_yet: "Not yet due", due: "Due", overdue: "Overdue",
         started: "Started", done: "Done" },
-  ur: { not_started: "شروع نہیں کیا", in_progress: "جاری", stopped: "ادھورا (بند)", completed: "مکمل",
+  ur: { not_started: "شروع نہیں کیا", in_progress: "جاری", stopped: "ادھورا (بند)", completed: "مکمل", partial: "ویڈیو دیکھی، مکمل نہیں",
         declined: "رضامندی نہیں دی", not_eligible: "—", not_yet: "ابھی وقت نہیں", due: "وقت آ گیا", overdue: "تاخیر",
         started: "شروع کیا", done: "مکمل" },
 };
@@ -93,10 +99,12 @@ const FILTERS = [
   ["all", () => true, "All", "سب"],
   ["not_started", (p) => p.main_status === "not_started", "Not started", "شروع نہیں کیا"],
   ["started", (p) => ["in_progress", "stopped"].includes(p.main_status), "Started, not finished", "شروع، مکمل نہیں"],
-  ["completed", (p) => p.main_status === "completed", "Main done", "مرکزی مکمل"],
+  ["full", (p) => p.compliance === "full", "Full compliance", "مکمل شرکت"],
+  ["partial", (p) => p.compliance === "partial", "Partial compliance", "جزوی شرکت"],
   ["fu2", (p) => ["due", "overdue", "started"].includes(p.fu2_status), "2-week due", "2 ہفتے باقی"],
   ["fu4", (p) => ["due", "overdue", "started"].includes(p.fu4_status), "4-week due", "4 ہفتے باقی"],
-  ["fu_done", (p) => p.fu2_status === "done" || p.fu4_status === "done", "Follow-up done", "فالو اپ مکمل"],
+  ["fu2done", (p) => p.fu2_status === "done", "2-week done", "2 ہفتے مکمل"],
+  ["fu4done", (p) => p.fu4_status === "done", "4-week done", "4 ہفتے مکمل"],
   ["payment", (p) => p.action === "payment_due", "Payment due", "ادائیگی باقی"],
   ["dnc", (p) => p.action === "do_not_contact", "Do not contact", "رابطہ نہ کریں"],
 ];
@@ -207,16 +215,22 @@ function render() { renderStats(); renderAdmin(); renderChips(); renderList(); }
 function renderStats() {
   const ps = base();
   const n = (f) => ps.filter(f).length;
+  const target = (D.target || 300) * (D.role === "admin" && !$("#enuSel").value ? D.enumerators.length : 1);
+  const full = n((p) => p.compliance === "full"), part = n((p) => p.compliance === "partial");
+  const split = (st) => `${n((p) => p.compliance === "full" && p[st] === "done")} + ${n((p) => p.compliance === "partial" && p[st] === "done")}`;
   const cards = [
-    ["all", t("stat_total"), ps.length],
-    ["today", t("stat_today"), n((p) => p.call_today)],
-    ["completed", t("stat_completed"), n((p) => p.main_status === "completed")],
-    ["started", t("stat_inprog"), n((p) => ["in_progress", "stopped"].includes(p.main_status))],
-    ["fu2", t("stat_fudue"), n((p) => ["fu2", "fu4"].includes(p.action))],
-    ["payment", t("stat_pay"), n((p) => p.action === "payment_due")],
+    ["full", t("stat_full"), `${full.toLocaleString()} / ${target.toLocaleString()}`, Math.min(100, (100 * full) / target)],
+    ["partial", t("stat_partial"), part.toLocaleString()],
+    ["today", t("stat_today"), n((p) => p.call_today).toLocaleString()],
+    ["started", t("stat_inprog"), n((p) => ["in_progress", "stopped"].includes(p.main_status)).toLocaleString()],
+    ["fu2done", t("stat_fu2done"), split("fu2_status")],
+    ["fu4done", t("stat_fu4done"), split("fu4_status")],
+    ["fu2", t("stat_fudue"), n((p) => ["fu2", "fu4"].includes(p.action)).toLocaleString()],
+    ["all", t("stat_total"), ps.length.toLocaleString()],
   ];
-  $("#stats").innerHTML = cards.map(([f, l, v]) =>
-    `<button class="stat ${filter === f ? "hl" : ""}" data-f="${f}"><div class="n">${v.toLocaleString()}</div><div class="l">${l}</div></button>`).join("");
+  $("#stats").innerHTML = cards.map(([f, l, v, pct]) =>
+    `<button class="stat ${filter === f ? "hl" : ""}" data-f="${f}"><div class="n">${v}</div><div class="l">${l}</div>
+      ${pct === undefined ? "" : `<div class="bar"><span style="width:${pct.toFixed(1)}%"></span></div>`}</button>`).join("");
   $("#stats").querySelectorAll(".stat").forEach((b) => b.onclick = () => { filter = b.dataset.f; shown = PAGE; render(); });
 }
 function renderAdmin() {
@@ -226,11 +240,13 @@ function renderAdmin() {
   const rows = D.enumerators.map((e) => {
     const ps = D.people.filter((p) => p.enumerator === e);
     const c = (f) => ps.filter(f).length;
-    const done = c((p) => p.main_status === "completed");
+    const done = c((p) => p.compliance === "full");
     const today = new Date().toISOString().slice(0, 10);
-    return `<tr><td>${e}</td><td>${ps.length}</td><td>${done}</td><td>${(100 * done / Math.max(ps.length, 1)).toFixed(1)}%</td>
+    const fp = (st, k) => c((p) => p.compliance === k && p[st] === "done");
+    return `<tr><td>${e}</td><td>${ps.length}</td><td>${done}</td><td>${(100 * done / (D.target || 300)).toFixed(0)}%</td>
+      <td>${c((p) => p.compliance === "partial")}</td>
       <td>${c((p) => ["in_progress", "stopped"].includes(p.main_status))}</td><td>${c((p) => p.call_today)}</td>
-      <td>${c((p) => p.fu2_status === "done")}</td><td>${c((p) => p.fu4_status === "done")}</td>
+      <td>${fp("fu2_status", "full")} + ${fp("fu2_status", "partial")}</td><td>${fp("fu4_status", "full")} + ${fp("fu4_status", "partial")}</td>
       <td>${c((p) => ["overdue"].includes(p.fu2_status) || ["overdue"].includes(p.fu4_status))}</td>
       <td>${ps.reduce((s, p) => s + (p.n_calls || 0), 0)}</td>
       <td>${ps.reduce((s, p) => s + (p.calls || []).filter((x) => String(x.time).slice(0, 10) === today).length, 0)}</td></tr>`;
@@ -238,14 +254,15 @@ function renderAdmin() {
   const flags = [
     ["Under 18", D.people.filter((p) => p.under_18 === "Yes").length],
     ["Completed main survey twice (pay once)", D.people.filter((p) => p.n_completed > 1).length],
-    ["Saw a video, not finished: a restart re-randomises (flag in analysis)", D.people.filter((p) => p.video_seen && p.main_status !== "completed").length],
+    ["Partial compliance: saw a video, not finished (in follow-ups, never restarted)", D.people.filter((p) => p.compliance === "partial").length],
     ["Shown a video in more than one attempt", D.people.filter((p) => p.n_video_attempts > 1).length],
     ["Declined consent / refused", D.people.filter((p) => p.action === "do_not_contact").length],
     ["Follow-up from an unknown number", D.people.filter((p) => String(p.source).includes("not recognised")).length],
     ["Payment due", D.people.filter((p) => p.action === "payment_due").length],
   ];
   panel.innerHTML = `<div class="admin-scroll"><table class="admin-table"><thead><tr><th>Enumerator</th><th>People</th>
-    <th>Main done</th><th>%</th><th>Started</th><th>Call today</th><th>2-wk done</th><th>4-wk done</th><th>Overdue</th>
+    <th>Full</th><th>% of ${D.target || 300}</th><th>Partial</th><th>Started (no video)</th><th>Call today</th>
+    <th>2-wk done (full + partial)</th><th>4-wk done (full + partial)</th><th>Overdue</th>
     <th>Calls (all)</th><th>Calls today</th></tr></thead><tbody>${rows}</tbody></table></div>
     <div class="chips">${flags.map(([l, v]) => `<span class="b ${v ? "warn" : ""}">${l}: ${v}</span>`).join("")}</div>`;
 }
@@ -266,7 +283,7 @@ function filtered() {
     .sort((a, b) => (rank[a.action] ?? 9) - (rank[b.action] ?? 9) || String(a.fu4_due || a.fu2_due).localeCompare(String(b.fu4_due || b.fu2_due)) || a.pid.localeCompare(b.pid));
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-const tone = (s) => ({ completed: "ok", done: "ok", in_progress: "info", started: "info", due: "warn", stopped: "warn",
+const tone = (s) => ({ completed: "ok", done: "ok", in_progress: "info", started: "info", partial: "info", due: "warn", stopped: "warn",
   overdue: "bad", declined: "bad" }[s] || "");
 function badge(label, s, extra = "") {
   if (s === "not_eligible") return "";
@@ -286,7 +303,7 @@ function renderList() {
   $("#list").innerHTML = items.map((p) => {
     const logs = logsFor(p);
     const last = logs[logs.length - 1];
-    const prog = ["in_progress", "stopped"].includes(p.main_status) ? ` ${p.main_progress}%` : "";
+    const prog = ["in_progress", "stopped", "partial"].includes(p.main_status) ? ` ${p.main_progress}%` : "";
     const due2 = ["due", "overdue", "not_yet", "started"].includes(p.fu2_status) ? ` · ${p.fu2_due}` : "";
     const due4 = ["due", "overdue", "not_yet", "started"].includes(p.fu4_status) ? ` · ${p.fu4_due}` : "";
     const canMsg = p.action !== "do_not_contact";
@@ -295,7 +312,7 @@ function renderList() {
       <div class="row1"><span class="nm">${esc(p.name) || "—"}</span>
         <span class="meta">${p.pid} · ${p.phone}${D.role === "admin" ? " · " + p.enumerator : ""}</span></div>
       <div class="meta">${esc([p.district, p.province].filter(Boolean).join(", "))}</div>
-      <div class="badges">${badge(t("main"), p.main_status, prog)}${badge(t("w2"), p.fu2_status, due2)}${badge(t("w4"), p.fu4_status, due4)}
+      <div class="badges">${p.compliance ? `<span class="b ${p.compliance === "full" ? "ok" : "info"} strong">${t(p.compliance)}</span>` : ""}${badge(t("main"), p.main_status, prog)}${badge(t("w2"), p.fu2_status, due2)}${badge(t("w4"), p.fu4_status, due4)}
         ${D.role === "admin" && p.under_18 === "Yes" ? '<span class="b bad">Under 18</span>' : ""}
         ${p.paid ? '<span class="b ok">Paid</span>' : ""}</div>
       <div class="act">➜ <b>${ACTION[lang][p.action] || p.action}</b>${p.next_call ? ` · ${t("nextCall").split(" (")[0]}: ${p.next_call}` : ""}</div>
@@ -351,7 +368,7 @@ function download(name, rows) {
 }
 function exportCsv() {
   const cols = ["pid", "enumerator", "name", "phone", "district", "province", "main_status", "main_progress", "main_done",
-    "fu2_status", "fu2_due", "fu4_status", "fu4_due", "action", "next_call", "n_calls"];
+    "compliance", "fu2_status", "fu2_due", "fu4_status", "fu4_due", "action", "next_call", "n_calls"];
   download(`${D.code}_list_${new Date().toISOString().slice(0, 10)}.csv`, [cols, ...filtered().map((p) => cols.map((c) => p[c]))]);
 }
 function exportLogs() {

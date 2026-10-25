@@ -335,6 +335,7 @@ def main():
     # ---------------- publish encrypted files
     gen = datetime.now().strftime("%Y-%m-%d %H:%M")
     public = {"links": CFG["links"], "apps_script_url": CFG["apps_script_url"], "generated": gen,
+              "target": CFG.get("target_per_enumerator", 300),
               "fu2_day": CFG["fu2_day"], "fu4_day": CFG["fu4_day"]}
     hidden_admin = ("age", "under_18", "gender", "video_seen", "n_video_attempts")
     for e in ENUS:
@@ -354,10 +355,14 @@ def main():
              "4-week: " + ", ".join(f"{k} {v}" for k, v in df.fu4_status.value_counts().items()),
              f"Call today (all enumerators): {int(df.call_today.sum())}",
              f"Call-log entries read: {sum(len(v) for v in logs.values())}", "",
-             "Per enumerator: people / completed / call today"]
+             f"Full compliance: {int((df.compliance == 'full').sum())}   Partial compliance (video, not finished): "
+             f"{int((df.compliance == 'partial').sum())}", "",
+             "Per enumerator: people / full / partial / 2-wk done / 4-wk done / call today"]
     for e in ENUS:
         d = df[df.enumerator == e]
-        lines.append(f"  {e}: {len(d):5d} / {int((d.main_status == 'completed').sum()):4d} / {int(d.call_today.sum()):4d}")
+        lines.append(f"  {e}: {len(d):5d} / {int((d.compliance == 'full').sum()):4d} / {int((d.compliance == 'partial').sum()):4d}"
+                     f" / {int((d.fu2_status == 'done').sum()):4d} / {int((d.fu4_status == 'done').sum()):4d}"
+                     f" / {int(d.call_today.sum()):4d}")
     open(P("state", "last_run.txt"), "w", encoding="utf-8").write("\n".join(lines))
     print("\n".join(lines))
     print("\nNext: commit and push the docs/ folder (see README.md).")
@@ -421,7 +426,20 @@ def build_person(i, s, mains, fu2, fu4, logs):
         n_completed = sum(m["status"] == "completed" for m in mains)
     else:
         main_status, video_seen, main_done, last_start, progress, n_completed = "not_started", False, None, None, 0, 0
-        n_video = 0
+        n_video, consent_yes = 0, False
+
+    # ---- compliance: full = finished the main survey; partial = saw a video, consented, did not finish.
+    # Partial completers are treated (never restarted: a new attempt would re-randomise the video) and
+    # enter the 2-/4-week follow-ups, counted from the day they watched the video.
+    compliance, partial_open = "", False
+    if main_status == "completed":
+        compliance = "full"
+    elif video_seen and consent_yes and main_status in ("in_progress", "stopped"):
+        compliance = "partial"
+        partial_open = main_status == "in_progress"
+        vids = [m["start"] for m in mains if m["video"] and not pd.isna(m["start"])]
+        main_done = max(vids) if vids else last_start
+        main_status = "partial"
 
     # ---- follow-up windows
     def wave(rec, day):
@@ -452,9 +470,8 @@ def build_person(i, s, mains, fu2, fu4, logs):
         action, link = "do_not_contact", ""
     elif main_status == "not_started":
         action, link = "main_invite", "main"
-    # started but not finished: always follow up (PI decision 25 Oct, low response rate).
-    # In progress -> reopen the link on the same phone to continue; stopped (closed) -> start again.
-    # A restart after a video re-randomises the arm: flagged as video_seen / n_video_attempts for analysis.
+    # started, no video yet: in progress -> reopen on the same phone; stopped (closed) -> start again.
+    # (Anyone who already saw a video is "partial" above and is never asked to restart.)
     elif main_status == "in_progress":
         action, link = ("main_remind" if stall else "wait_main"), "main"
     elif main_status == "stopped":
@@ -465,6 +482,8 @@ def build_person(i, s, mains, fu2, fu4, logs):
         action, link = "fu2", "fu2"
     elif fu2_status == "done" and fu4_status == "done":
         action, link = ("payment_done" if paid else "payment_due"), ""
+    elif partial_open and stall:
+        action, link = "main_remind", "main"       # same open session: same video, no re-randomisation
     else:
         action, link = "wait_followup", ""
     next_call = (last or {}).get("next_call", "") or ""
@@ -481,6 +500,7 @@ def build_person(i, s, mains, fu2, fu4, logs):
         "source": s.source, "first_seen": str(s.first_seen)[:10],
         "main_status": main_status, "main_progress": progress, "main_done": fmt(main_done),
         "main_last_start": fmt(last_start), "video_seen": bool(video_seen), "n_video_attempts": n_video, "n_completed": n_completed,
+        "compliance": compliance, "followup_from": fmt(main_done),
         "fu2_status": fu2_status, "fu2_due": fu2_due, "fu4_status": fu4_status, "fu4_due": fu4_due,
         "action": action, "link": link, "call_today": bool(call_today), "next_call": next_call,
         "tags": tags, "calls": logs[-6:], "n_calls": len(logs), "paid": paid,

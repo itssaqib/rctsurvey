@@ -123,3 +123,7 @@ dialog h2 { margin: 0; font-size: 18px; }
 .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink); color: var(--card);
   padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 20; max-width: calc(100vw - 32px); }
+
+.stat .bar { height: 6px; border-radius: 99px; background: var(--gray-soft); margin-top: 8px; overflow: hidden; }
+.stat .bar span { display: block; height: 100%; background: var(--brand); border-radius: 99px; }
+.b.strong { font-weight: 700; }

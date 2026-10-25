@@ -79,14 +79,24 @@ Follow-ups: *Not yet due* → *Due* (from day 14 / day 28 after completion) →
 *Overdue* (7 days after due) → *Done*. After both are done: *Payment due* → log
 "Paid Rs 350" from the ADMIN login.
 
-**Next action rules.** Not started → send main link. In progress → after 2 days, remind
-them to reopen the link **on the same phone** (Qualtrics continues where they stopped).
-Stopped (closed) → ask them to fill the survey again from the start. This applies even
-if they already saw a video (team decision, 25 Oct, because of the low response rate).
-A new attempt re-randomises them, so ADMIN shows "Saw a video, not finished" and
-"Shown a video in more than one attempt": keep these people flagged in the analysis.
-Completed → 2-week, then 4-week follow-up. Refused or wrong number → removed from
-"Call today".
+**Compliance.** *Full compliance* = finished the main survey (target: 300 per
+enumerator). *Partial compliance* = consented and **saw a video** but did not finish.
+Both are treated participants: both go into the 2-week and 4-week follow-ups. For
+partial compliers the 14/28 days count from the day they watched the video. The
+dashboard shows follow-up completions as "full + partial".
+
+**Next action rules.** Not started → send main link. Started but **no video yet**:
+in progress → after 2 days remind them to reopen the link on the same phone; stopped
+(closed) → ask them to fill the survey again from the start (safe, they have not been
+treated). **Saw a video** → never restarted (a new attempt would re-randomise the video);
+if their session is still open they are reminded to finish it on the same phone, and they
+receive the 2-week and 4-week follow-ups. Full compliance → 2-week, then 4-week
+follow-up. Refused or wrong number → removed from "Call today".
+
+**Analysis note (add to the pre-analysis plan):** treated = reached the video page.
+Follow-up outcomes are analysed for full + partial compliers (intention to treat);
+missing post-video items of partial compliers are attrition for the immediate outcomes
+only (report balance by arm / Lee bounds), not imputed.
 
 ## Changing things
 

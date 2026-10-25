@@ -11,5 +11,6 @@
   "fu2_day": 14,
   "fu4_day": 28,
   "window_days": 7,
-  "stall_days": 2
+  "stall_days": 2,
+  "target_per_enumerator": 300
 }
