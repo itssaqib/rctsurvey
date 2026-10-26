@@ -47,6 +47,7 @@
         </div>
       </div>
       <div class="top-actions">
+        <button class="btn ghost sm" id="refreshBtn" data-t="refresh">Refresh</button>
         <button class="btn ghost sm" data-lang-toggle>اردو</button>
         <button class="btn ghost sm" id="logoutBtn" data-t="logout">Log out</button>
       </div>
@@ -92,6 +93,23 @@
       <div class="dlg-actions">
         <button value="cancel" class="btn ghost" data-t="cancel">Cancel</button>
         <button id="saveLog" value="save" class="btn primary" data-t="save">Save</button>
+      </div>
+    </form>
+  </dialog>
+  <!-- PAYMENT DIALOG (PAY login) -->
+  <dialog id="payDlg">
+    <form method="dialog" id="payForm">
+      <h2 id="payTitle"></h2>
+      <label class="field"><span data-t="method">Method</span>
+        <select id="payMethod"><option>JazzCash</option><option>EasyPaisa</option><option>Bank transfer</option><option>Other</option></select>
+      </label>
+      <label class="field"><span data-t="payNumber">Account number</span><input id="payNumber" inputmode="tel"></label>
+      <label class="field"><span data-t="amount">Amount (PKR)</span><input id="payAmount" inputmode="numeric"></label>
+      <label class="field"><span data-t="reference">Transaction ID / reference</span><input id="payRef"></label>
+      <label class="field"><span data-t="note">Note (optional)</span><textarea id="payNote" rows="2"></textarea></label>
+      <div class="dlg-actions">
+        <button value="cancel" class="btn ghost" data-t="cancel">Cancel</button>
+        <button value="save" class="btn primary" data-t="save">Save</button>
       </div>
     </form>
   </dialog>

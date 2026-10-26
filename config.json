@@ -7,10 +7,12 @@
     "fu2": "https://kdischool.asia.qualtrics.com/jfe/form/SV_0x0nuagG2is0DkO?Q_Language=UR",
     "fu4": "https://kdischool.asia.qualtrics.com/jfe/form/SV_a5bnKOKTeBRPp8W?Q_Language=UR"
   },
-  "apps_script_url": "",
+  "apps_script_url": "https://script.google.com/macros/s/AKfycbz6I0grTdrDup0DaC5D6JfxoRWvzrYf6Vwrq56Pbh2HCnlk4ieZZHjiGzFHjX1TU2lt/exec",
   "fu2_day": 14,
   "fu4_day": 28,
   "window_days": 7,
   "stall_days": 2,
-  "target_per_enumerator": 300
+  "target_per_enumerator": 300,
+  "pay_fu2": 200,
+  "pay_fu4": 150
 }

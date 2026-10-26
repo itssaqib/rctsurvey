@@ -127,3 +127,9 @@ dialog h2 { margin: 0; font-size: 18px; }
 .stat .bar { height: 6px; border-radius: 99px; background: var(--gray-soft); margin-top: 8px; overflow: hidden; }
 .stat .bar span { display: block; height: 100%; background: var(--brand); border-radius: 99px; }
 .b.strong { font-weight: 700; }
+
+.paybox { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; margin-top: 8px; font-size: 14px; line-height: 1.7; }
+.paybox.due { background: var(--warn-soft); border-color: transparent; }
+.paybox.ok { background: var(--ok-soft); border-color: transparent; color: var(--ok); }
+.paybox .num { font-weight: 700; font-variant-numeric: tabular-nums; letter-spacing: .3px; }
+.paybox .btn { margin-inline-start: 8px; }

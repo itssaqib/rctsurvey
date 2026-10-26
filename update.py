@@ -152,19 +152,22 @@ WORDS = ("apple river stone cloud mango tiger lemon green bread chair horse ligh
 
 
 def make_secrets():
+    """One passphrase + log token per login (ENU01..ENU10, ADMIN, PAY). Existing ones never change;
+    a missing login (e.g. PAY added later) gets a new one."""
     path = P("secrets", "passphrases.json")
-    if os.path.exists(path):
-        out = json.load(open(path, encoding="utf-8"))
-        write_tokens(out)
-        return out
+    out = json.load(open(path, encoding="utf-8")) if os.path.exists(path) else {}
     rnd = secrets.SystemRandom()
-    out = {}
-    for code in ENUS + ["ADMIN"]:
-        words = "-".join(rnd.choice(WORDS) for _ in range(4)) + f"-{rnd.randint(10, 99)}"
-        out[code] = {"passphrase": words, "log_token": secrets.token_urlsafe(18)}
-    json.dump(out, open(path, "w", encoding="utf-8"), indent=2)
+    added = []
+    for code in ENUS + ["ADMIN", "PAY"]:
+        if code not in out:
+            words = "-".join(rnd.choice(WORDS) for _ in range(4)) + f"-{rnd.randint(10, 99)}"
+            out[code] = {"passphrase": words, "log_token": secrets.token_urlsafe(18)}
+            added.append(code)
+    if added:
+        json.dump(out, open(path, "w", encoding="utf-8"), indent=2)
+        print("NEW passphrase(s) for", ", ".join(added), "in secrets/passphrases.json - give each person only their own.",
+              "Also paste secrets/apps_script_tokens.json into the Apps Script property TOKENS again.")
     write_tokens(out)
-    print("NEW passphrases written to secrets/passphrases.json - give each enumerator only their own.")
     return out
 
 
@@ -273,23 +276,34 @@ def main():
         if i not in reg_profile and prof["name"]:
             reg_profile.setdefault(i, prof)
 
-    # ---------------- follow-ups
+    # ---------------- follow-ups (2-week, 4-week)
     fu = {"fu2": {}, "fu4": {}}
+    unmatched = []            # follow-ups from numbers not in the study: shown to ADMIN, never new people
     for w in ("fu2", "fu4"):
+        recs = {}
         for _, r in cat[w].iterrows():
             ph = clean_phone(val(r, "fu_mobile"))
-            if not ph:
+            rid = val(r, "ResponseId") or ""
+            finished = str(val(r, "Finished")).lower() in ("true", "1")
+            i = known.get(ph) if ph else None
+            if i is None:
+                if ph or finished:
+                    unmatched.append({"wave": w, "phone_typed": val(r, "fu_mobile") or "", "name": tidy(val(r, "fu_name")),
+                                      "date": str(val(r, "StartDate"))[:16], "finished": finished, "response_id": rid})
                 continue
-            i = known.get(ph)
-            if i is None:      # follow-up from a number we have never seen: keep it visible to admin
-                i = person_for([ph], val(r, "StartDate"), dict(name=tidy(val(r, "fu_name")), gender="", age="",
-                               province="", district="", city=""), f"{w} only (number not recognised)")
-            done = str(val(r, "Finished")).lower() in ("true", "1") and val(r, "fu_consent") != "No"
-            prev = fu[w].get(i)
-            rec = dict(done=done, date=to_dt(val(r, "EndDate" if done else "StartDate")),
-                       progress=int(float(val(r, "Progress") or 0)))
-            if prev is None or (rec["done"] and not prev["done"]):
-                fu[w][i] = rec
+            done = finished and val(r, "fu_consent") != "No"
+            recs.setdefault(i, []).append(dict(
+                done=done, open=rid.startswith("FS_"), start=to_dt(val(r, "StartDate")),
+                date=to_dt(val(r, "EndDate") if done else val(r, "StartDate")),
+                progress=int(float(val(r, "Progress") or 0)),
+                pay_method=eng(val(r, "fu_pay_method")), pay_number=clean_phone(val(r, "fu_pay_number")) or ""))
+        for i, rs in recs.items():
+            # stale in-progress copies of an attempt that is now closed are dropped (same start time)
+            closed = {str(x["start"])[:19] for x in rs if not x["open"]}
+            rs = [x for x in rs if not (x["open"] and str(x["start"])[:19] in closed)] or rs
+            done = [x for x in rs if x["done"]]
+            fu[w][i] = min(done, key=lambda x: x["date"]) if done else max(
+                rs, key=lambda x: x["start"] if not pd.isna(x["start"]) else pd.Timestamp.min)
 
     # ---------------- assign new people (IDs continue the sequence; fewest-people enumerator)
     if new_people:
@@ -336,14 +350,23 @@ def main():
     gen = datetime.now().strftime("%Y-%m-%d %H:%M")
     public = {"links": CFG["links"], "apps_script_url": CFG["apps_script_url"], "generated": gen,
               "target": CFG.get("target_per_enumerator", 300),
-              "fu2_day": CFG["fu2_day"], "fu4_day": CFG["fu4_day"]}
+              "fu2_day": CFG["fu2_day"], "fu4_day": CFG["fu4_day"],
+              "pay_fu2": CFG.get("pay_fu2", 200), "pay_fu4": CFG.get("pay_fu4", 150)}
     hidden_admin = ("age", "under_18", "gender", "video_seen", "n_video_attempts")
     for e in ENUS:
         mine = [{k: v for k, v in p.items() if k not in hidden_admin} for p in people if p["enumerator"] == e]
         obj = dict(public, role="enumerator", code=e, log_token=sec[e]["log_token"], people=mine)
         json.dump(encrypt(obj, sec[e]["passphrase"]), open(P("docs", "data", f"{e}.json.enc"), "w"))
     adm = dict(public, role="admin", code="ADMIN", log_token=sec["ADMIN"]["log_token"], people=people,
-               enumerators=ENUS)
+               enumerators=ENUS, unmatched=unmatched)
+    # PAY login (payment firm): only people who completed a follow-up; payment details, no survey answers
+    pay_keep = ("pid", "enumerator", "name", "phone", "district", "province", "compliance",
+                "fu2_status", "fu2_date", "fu4_status", "fu4_date", "pay2", "pay4")
+    payers = [dict({k: p[k] for k in pay_keep},
+                   calls=[c for c in p["calls"] if str(c.get("outcome", "")).startswith("paid")])
+              for p in people if p["pay2"]["status"] != "not_due" or p["pay4"]["status"] != "not_due"]
+    payobj = dict(public, role="pay", code="PAY", log_token=sec["PAY"]["log_token"], people=payers, enumerators=ENUS)
+    json.dump(encrypt(payobj, sec["PAY"]["passphrase"]), open(P("docs", "data", "PAY.json.enc"), "w"))
     json.dump(encrypt(adm, sec["ADMIN"]["passphrase"]), open(P("docs", "data", "ADMIN.json.enc"), "w"))
     json.dump({"generated": gen}, open(P("docs", "data", "version.json"), "w"))
 
@@ -354,7 +377,12 @@ def main():
              "2-week: " + ", ".join(f"{k} {v}" for k, v in df.fu2_status.value_counts().items()),
              "4-week: " + ", ".join(f"{k} {v}" for k, v in df.fu4_status.value_counts().items()),
              f"Call today (all enumerators): {int(df.call_today.sum())}",
-             f"Call-log entries read: {sum(len(v) for v in logs.values())}", "",
+             f"Call-log entries read: {sum(len(v) for v in logs.values())}",
+             "Payments 2-week (PKR {}): due {}, paid {}   4-week (PKR {}): due {}, paid {}".format(
+                 CFG.get("pay_fu2", 200), sum(p["pay2"]["status"] == "due" for p in people),
+                 sum(p["pay2"]["status"] == "paid" for p in people), CFG.get("pay_fu4", 150),
+                 sum(p["pay4"]["status"] == "due" for p in people), sum(p["pay4"]["status"] == "paid" for p in people)),
+             f"Follow-ups from numbers not in the study (see ADMIN): {len(unmatched)}", "",
              f"Full compliance: {int((df.compliance == 'full').sum())}   Partial compliance (video, not finished): "
              f"{int((df.compliance == 'partial').sum())}", "",
              "Per enumerator: people / full / partial / 2-wk done / 4-wk done / call today"]
@@ -366,6 +394,10 @@ def main():
     open(P("state", "last_run.txt"), "w", encoding="utf-8").write("\n".join(lines))
     print("\n".join(lines))
     print("\nNext: commit and push the docs/ folder (see README.md).")
+
+
+LOG_FIELDS = ("log_id", "time", "enumerator", "owner", "participant_id", "action", "outcome", "tags", "note",
+              "next_call", "amount", "method", "pay_number", "reference")
 
 
 def load_call_log(sec):
@@ -392,7 +424,7 @@ def load_call_log(sec):
         if valid.get(code) != r.get("token") and "token" in r:
             continue      # entries with a wrong token are ignored
         out.setdefault(str(r.get("participant_id", "")), []).append(
-            {k: r.get(k, "") for k in ("log_id", "time", "enumerator", "action", "outcome", "tags", "note", "next_call")})
+            {k: str(r.get(k, "") or "") for k in LOG_FIELDS})
     for v in out.values():
         v.sort(key=lambda x: x["time"])
     return out
@@ -442,26 +474,47 @@ def build_person(i, s, mains, fu2, fu4, logs):
         main_status = "partial"
 
     # ---- follow-up windows
+    # status: not_eligible | not_yet | due | overdue | in_progress (open session) | stopped (closed, unfinished)
+    #         | done | missed (2-week never done and the 4-week window has opened)
     def wave(rec, day):
         if main_done is None:
             return "not_eligible", ""
         due = (pd.Timestamp(main_done) + timedelta(days=day)).date()
         if rec and rec["done"]:
-            return "done", fmt(rec["date"])
+            return "done", due.isoformat()
+        if rec:                                  # started but not finished: send the link again
+            return ("in_progress" if rec["open"] else "stopped"), due.isoformat()
         if TODAY < due:
             return "not_yet", due.isoformat()
-        if rec:
-            return ("started", due.isoformat())
         return ("overdue" if TODAY >= due + timedelta(days=CFG["window_days"]) else "due"), due.isoformat()
 
     fu2_status, fu2_due = wave(fu2, CFG["fu2_day"])
     fu4_status, fu4_due = wave(fu4, CFG["fu4_day"])
-    # ---- calls
-    last = logs[-1] if logs else None
-    tags = sorted({t.strip() for l in logs for t in str(l.get("tags", "")).split(",") if t.strip()})
-    paid = any(l.get("outcome") == "paid" for l in logs)
+    if fu2_status in ("due", "overdue", "in_progress", "stopped") and fu4_status not in ("not_yet", "not_eligible"):
+        fu2_status = "missed"                    # the 4-week survey takes over
+    fu_rec = {"fu2": fu2, "fu4": fu4}
+    fu_open_stall = lambda w: bool(fu_rec[w] and fu_rec[w]["open"] and not pd.isna(fu_rec[w]["start"]) and
+                                   (TODAY - pd.Timestamp(fu_rec[w]["start"]).date()).days >= 1)
+    # ---- calls and payments (payments are logged by the PAY login: outcome paid_fu2 / paid_fu4)
+    last_call = [l for l in logs if not str(l.get("outcome", "")).startswith("paid")]
+    last = last_call[-1] if last_call else None
+    tags = sorted({t.strip() for l in last_call for t in str(l.get("tags", "")).split(",") if t.strip()})
     refused = bool(last and last.get("outcome") == "refused") or "refused" in tags
     wrong = "wrong_number" in tags
+
+    def pay(w, amount):
+        rec = fu_rec[w]
+        paid = [l for l in logs if l.get("outcome") == f"paid_{w}"]
+        if paid:
+            p = paid[-1]
+            return dict(status="paid", amount=p.get("amount") or amount, date=str(p.get("time", ""))[:10],
+                        ref=p.get("reference", ""), method=p.get("method", ""), number=p.get("pay_number", ""))
+        if rec and rec["done"]:
+            return dict(status="due", amount=amount, date=fmt(rec["date"]), ref="",
+                        method=rec["pay_method"], number=rec["pay_number"] or s.phone)
+        return dict(status="not_due", amount=amount, date="", ref="", method="", number="")
+
+    pay2, pay4 = pay("fu2", CFG.get("pay_fu2", 200)), pay("fu4", CFG.get("pay_fu4", 150))
     # ---- next action
     stall = last_start is not None and (TODAY - pd.Timestamp(last_start).date()).days >= CFG["stall_days"]
     if main_status == "declined":
@@ -476,12 +529,18 @@ def build_person(i, s, mains, fu2, fu4, logs):
         action, link = ("main_remind" if stall else "wait_main"), "main"
     elif main_status == "stopped":
         action, link = "main_restart", "main"
-    elif fu4_status in ("due", "overdue", "started"):
+    # follow-ups: not done -> send the link; started in an open session -> remind to finish on the same
+    # phone (after a day); started and closed -> send the link again (no randomisation in follow-ups)
+    elif fu4_status in ("due", "overdue", "stopped") or (fu4_status == "in_progress" and fu_open_stall("fu4")):
         action, link = "fu4", "fu4"
-    elif fu2_status in ("due", "overdue", "started") and fu4_status == "not_yet":
+    elif fu4_status == "in_progress":
+        action, link = "wait_fu", ""
+    elif fu2_status in ("due", "overdue", "stopped") or (fu2_status == "in_progress" and fu_open_stall("fu2")):
         action, link = "fu2", "fu2"
-    elif fu2_status == "done" and fu4_status == "done":
-        action, link = ("payment_done" if paid else "payment_due"), ""
+    elif fu2_status == "in_progress":
+        action, link = "wait_fu", ""
+    elif fu4_status == "done":
+        action, link = "all_done", ""
     elif partial_open and stall:
         action, link = "main_remind", "main"       # same open session: same video, no re-randomisation
     else:
@@ -502,8 +561,11 @@ def build_person(i, s, mains, fu2, fu4, logs):
         "main_last_start": fmt(last_start), "video_seen": bool(video_seen), "n_video_attempts": n_video, "n_completed": n_completed,
         "compliance": compliance, "followup_from": fmt(main_done),
         "fu2_status": fu2_status, "fu2_due": fu2_due, "fu4_status": fu4_status, "fu4_due": fu4_due,
+        "fu2_date": fmt(fu2["date"]) if fu2 and fu2["done"] else "", "fu4_date": fmt(fu4["date"]) if fu4 and fu4["done"] else "",
+        "fu2_progress": fu2["progress"] if fu2 else 0, "fu4_progress": fu4["progress"] if fu4 else 0,
+        "pay2": pay2, "pay4": pay4,
         "action": action, "link": link, "call_today": bool(call_today), "next_call": next_call,
-        "tags": tags, "calls": logs[-6:], "n_calls": len(logs), "paid": paid,
+        "tags": tags, "calls": logs[-8:], "n_calls": len(last_call),
         "age": "" if age is None else age, "under_18": "" if age is None else ("Yes" if age < 18 else "No"),
         "gender": s.gender or "",
     }
