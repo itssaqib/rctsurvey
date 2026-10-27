@@ -27,12 +27,22 @@ function out_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
+const isDate_ = (v) => Object.prototype.toString.call(v) === "[object Date]";
+
 function rows_() {
+  const tz = Session.getScriptTimeZone();
   const v = sheet_().getDataRange().getValues();
   const head = v.shift() || COLS;
   return v.map((r) => {
     const o = {};
-    head.forEach((h, i) => { o[h] = r[i] instanceof Date ? r[i].toISOString() : String(r[i]); });
+    head.forEach((h, i) => {
+      let x = r[i];
+      if (isDate_(x)) x = h === "next_call" ? Utilities.formatDate(x, tz, "yyyy-MM-dd") : x.toISOString();
+      x = String(x === null || x === undefined ? "" : x);
+      if (h === "participant_id" && /^\d{1,5}$/.test(x)) x = ("000000" + x).slice(-6);   // rows saved before the text fix
+      if (h === "pay_number" && /^3\d{9}$/.test(x)) x = "0" + x;
+      o[h] = x;
+    });
     return o;
   });
 }
@@ -56,9 +66,14 @@ function doPost(e) {
       if (ids.indexOf(d.log_id) !== -1) return out_({ ok: true, duplicate: true });
     }
     const c = (s, n) => String(s || "").slice(0, n);
-    sh.appendRow([new Date(), c(d.log_id, 64), c(d.time, 40), d.enumerator, c(d.owner, 10), String(d.participant_id),
-      c(d.action, 30), c(d.outcome, 30), c(d.tags, 200), c(d.note, 300), c(d.next_call, 10),
-      c(d.amount, 10), c(d.method, 20), c(d.pay_number, 20), c(d.reference, 60)]);
+    // every cell stored as plain text, so Sheets never turns dates into Date objects
+    // or drops the leading 0 of IDs and phone numbers
+    const row = sh.getLastRow() + 1;
+    const rng = sh.getRange(row, 1, 1, COLS.length);
+    rng.setNumberFormat("@");
+    rng.setValues([[new Date().toISOString(), c(d.log_id, 64), c(d.time, 40), d.enumerator, c(d.owner, 10),
+      String(d.participant_id), c(d.action, 30), c(d.outcome, 30), c(d.tags, 200), c(d.note, 300),
+      c(d.next_call, 10), c(d.amount, 10), c(d.method, 20), c(d.pay_number, 20), c(d.reference, 60)]]);
     return out_({ ok: true });
   } catch (err) {
     return out_({ ok: false, error: String(err) });

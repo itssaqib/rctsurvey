@@ -396,6 +396,20 @@ def main():
     print("\nNext: commit and push the docs/ folder (see README.md).")
 
 
+def norm_day(v):
+    """Any date / datetime text from the Sheet -> 'YYYY-MM-DD' (local day), or ''."""
+    v = str(v or "").strip()
+    if not v:
+        return ""
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+        return v
+    v2 = re.sub(r"\s*\(.*\)$", "", v)                 # 'Tue Oct 27 2026 00:00:00 GMT+0900 (...)'
+    t = pd.to_datetime(v2, errors="coerce", utc=True)
+    if pd.isna(t):
+        return v[:10]
+    return t.tz_convert(datetime.now().astimezone().tzinfo).strftime("%Y-%m-%d")
+
+
 LOG_FIELDS = ("log_id", "time", "enumerator", "owner", "participant_id", "action", "outcome", "tags", "note",
               "next_call", "amount", "method", "pay_number", "reference")
 
@@ -423,8 +437,14 @@ def load_call_log(sec):
         code = r.get("enumerator", "")
         if valid.get(code) != r.get("token") and "token" in r:
             continue      # entries with a wrong token are ignored
-        out.setdefault(str(r.get("participant_id", "")), []).append(
-            {k: str(r.get(k, "") or "") for k in LOG_FIELDS})
+        rec = {k: str(r.get(k, "") or "") for k in LOG_FIELDS}
+        pid = re.sub(r"\.0$", "", rec["participant_id"])
+        rec["participant_id"] = pid.zfill(6) if pid.isdigit() else pid       # Sheets drops leading zeros
+        rec["next_call"] = norm_day(rec["next_call"])
+        rec["day"] = norm_day(rec["time"])                                  # local calendar day of the call
+        if rec["pay_number"]:
+            rec["pay_number"] = clean_phone(rec["pay_number"]) or rec["pay_number"]
+        out.setdefault(rec["participant_id"], []).append(rec)
     for v in out.values():
         v.sort(key=lambda x: x["time"])
     return out
@@ -547,7 +567,7 @@ def build_person(i, s, mains, fu2, fu4, logs):
         action, link = "wait_followup", ""
     next_call = (last or {}).get("next_call", "") or ""
     actionable = action in ("main_invite", "main_remind", "main_restart", "fu2", "fu4")
-    called_today = bool(last and str(last.get("time", ""))[:10] == TODAY.isoformat())
+    called_today = bool(last and last.get("day", str(last.get("time", ""))[:10]) == TODAY.isoformat())
     call_today = (actionable and not wrong and not called_today and (not next_call or next_call <= TODAY.isoformat()))
     try:
         age = int(float(s.age))

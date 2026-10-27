@@ -7,7 +7,7 @@
 <title>Fieldwork Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=20261027">
 </head>
 <body>
 <div id="app">
@@ -54,15 +54,19 @@
     </header>
 
     <div class="wrap">
-      <div id="stats" class="stats"></div>
-      <div id="adminPanel" hidden></div>
+      <section id="progress" class="panel" hidden></section>
+      <section id="adminPanel" hidden></section>
+      <div id="stats" class="stats" hidden></div>
 
       <div class="toolbar">
         <input id="search" type="search" data-tp="search" placeholder="Search name, ID or phone">
-        <select id="tagSel"></select>
         <select id="enuSel" hidden></select>
+        <select id="tagSel"></select>
       </div>
-      <div id="chips" class="chips"></div>
+      <div class="tabs-row">
+        <div id="chips" class="tabs" role="tablist"></div>
+        <select id="moreSel" class="more-sel"></select>
+      </div>
       <div class="list-head">
         <span id="count" class="muted small"></span>
         <span class="list-actions">
@@ -75,7 +79,7 @@
     </div>
   </section>
 
-  <!-- LOG DIALOG -->
+  <!-- CALL LOG DIALOG -->
   <dialog id="logDlg">
     <form method="dialog" id="logForm">
       <h2 id="logTitle"></h2>
@@ -92,10 +96,11 @@
       </label>
       <div class="dlg-actions">
         <button value="cancel" class="btn ghost" data-t="cancel">Cancel</button>
-        <button id="saveLog" value="save" class="btn primary" data-t="save">Save</button>
+        <button value="save" class="btn primary" data-t="save">Save</button>
       </div>
     </form>
   </dialog>
+
   <!-- PAYMENT DIALOG (PAY login) -->
   <dialog id="payDlg">
     <form method="dialog" id="payForm">
@@ -113,8 +118,9 @@
       </div>
     </form>
   </dialog>
+  <div id="tip" class="tip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 </div>
-<script src="app.js"></script>
+<script src="app.js?v=20261027"></script>
 </body>
 </html>

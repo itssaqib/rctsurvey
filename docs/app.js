@@ -10,7 +10,17 @@ const store = {
   set(k, v) { try { localStorage.setItem(k, v); } catch (e) {} },
   del(k) { try { localStorage.removeItem(k); } catch (e) {} },
 };
-const today = () => new Date().toISOString().slice(0, 10);
+const pad = (n) => String(n).padStart(2, "0");
+const localDay = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const today = () => localDay(new Date());
+/* any date text from the Sheet -> local YYYY-MM-DD */
+function normDay(v) {
+  v = String(v || "").trim();
+  if (!v) return "";
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+  const d = new Date(v.replace(/\s*\(.*\)$/, ""));
+  return isNaN(d) ? v.slice(0, 10) : localDay(d);
+}
 
 /* ---------------------------------------------------------------- text */
 const T = {
@@ -21,22 +31,22 @@ const T = {
     exportLogs: "Download my unsent logs", more: "Show more", outcome: "What happened?", tags: "Tags",
     nextCall: "Next call date (optional)", note: "Note (optional)", cancel: "Cancel", save: "Save",
     badPass: "Wrong code or passphrase.", noData: "No data file for this code yet.", allTags: "All tags",
-    allEnus: "All enumerators", shown: "shown", of: "of", call: "Call", wa: "WhatsApp", log: "Log call",
-    history: "Call history", noCalls: "No calls logged yet.", savedOnline: "Saved.", savedLocal:
+    allEnus: "All enumerators", shown: "shown", call: "Call", wa: "WhatsApp", log: "Log call",
+    history: "History", noCalls: "Nothing logged yet.", savedOnline: "Saved.", savedLocal:
     "Saved on this phone. It will be sent when you are online.", pending: "not yet synced",
-    main: "Main", w2: "2-week", w4: "4-week", due: "due", since: "since", refresh: "Refresh",
+    main: "Main", w2: "2-week", w4: "4-week", refresh: "Refresh", nextCallShort: "Next call",
     synced: "Live updates loaded", syncFail: "Could not load live updates (offline?)",
-    stat_total: "My participants", stat_today: "Call today",
-    stat_inprog: "Started, no video yet", stat_fudue: "Follow-up due",
-    stat_full: "Full compliance (target)", stat_partial: "Partial compliance (saw video)",
-    stat_fu2done: "2-week done (full + partial)", stat_fu4done: "4-week done (full + partial)",
-    stat_paystate: "Payments: paid / pending",
+    progress: "Progress to target", perRound: "per round, same people", plusPartial: "+ {n} partial",
+    roundMain: "Main survey", round2: "2-week follow-up", round4: "4-week follow-up",
+    of: "of", moreFilters: "More…",
     full: "Full compliance", partial: "Partial compliance",
     pay2: "2-week payment", pay4: "4-week payment", paid: "Paid", payDue: "Due", markPaid: "Mark as paid",
     method: "Method", payNumber: "Account number", amount: "Amount (PKR)", reference: "Transaction ID / reference",
-    payDate: "Payment date", stat_pay2due: "2-week payments due", stat_pay4due: "4-week payments due",
+    stat_pay2due: "2-week payments due", stat_pay4due: "4-week payments due",
     stat_paidtoday: "Paid today", stat_paidall: "Paid so far", pkr: "PKR", completed: "completed",
     savedPay: "Payment saved.", needRef: "Enter the transaction ID.",
+    byEnum: "Completions by enumerator", target: "Target", details: "Details per enumerator",
+    checks: "Checks", unmatched: "Follow-ups from numbers not in the study",
   },
   ur: {
     title: "فیلڈ ورک ٹریکر", subtitle: "سنی–شیعہ تحقیق · شرکاء سے رابطہ", code: "آپ کا کوڈ",
@@ -45,58 +55,59 @@ const T = {
     exportLogs: "نہ بھیجی گئی کالز ڈاؤن لوڈ کریں", more: "مزید دکھائیں", outcome: "کیا ہوا؟", tags: "ٹیگ",
     nextCall: "اگلی کال کی تاریخ (اختیاری)", note: "نوٹ (اختیاری)", cancel: "منسوخ", save: "محفوظ کریں",
     badPass: "کوڈ یا پاس فریز غلط ہے۔", noData: "اس کوڈ کی فائل ابھی موجود نہیں۔", allTags: "تمام ٹیگ",
-    allEnus: "تمام انیومریٹرز", shown: "دکھائے گئے", of: "میں سے", call: "کال", wa: "واٹس ایپ", log: "کال درج کریں",
-    history: "کالز کی تاریخ", noCalls: "ابھی کوئی کال درج نہیں۔", savedOnline: "محفوظ ہو گیا۔", savedLocal:
+    allEnus: "تمام انیومریٹرز", shown: "دکھائے گئے", call: "کال", wa: "واٹس ایپ", log: "کال درج کریں",
+    history: "تاریخ", noCalls: "ابھی کچھ درج نہیں۔", savedOnline: "محفوظ ہو گیا۔", savedLocal:
     "اس فون پر محفوظ ہے، انٹرنیٹ ملنے پر بھیج دیا جائے گا۔", pending: "ابھی سنک نہیں ہوا",
-    main: "مرکزی سروے", w2: "2 ہفتے", w4: "4 ہفتے", due: "مقررہ", since: "سے", refresh: "تازہ کریں",
+    main: "مرکزی سروے", w2: "2 ہفتے", w4: "4 ہفتے", refresh: "تازہ کریں", nextCallShort: "اگلی کال",
     synced: "تازہ معلومات آ گئیں", syncFail: "تازہ معلومات نہیں آ سکیں (انٹرنیٹ؟)",
-    stat_total: "میرے شرکاء", stat_today: "آج کال کریں",
-    stat_inprog: "شروع، ابھی ویڈیو نہیں", stat_fudue: "فالو اپ باقی",
-    stat_full: "مکمل شرکت (ہدف)", stat_partial: "جزوی شرکت (ویڈیو دیکھی)",
-    stat_fu2done: "2 ہفتے مکمل (مکمل + جزوی)", stat_fu4done: "4 ہفتے مکمل (مکمل + جزوی)",
-    stat_paystate: "ادائیگی: ہو گئی / باقی",
+    progress: "ہدف کی طرف پیش رفت", perRound: "ہر مرحلہ، وہی لوگ", plusPartial: "+ {n} جزوی",
+    roundMain: "مرکزی سروے", round2: "2 ہفتے کا فالو اپ", round4: "4 ہفتے کا فالو اپ",
+    of: "میں سے", moreFilters: "مزید…",
     full: "مکمل شرکت", partial: "جزوی شرکت",
     pay2: "2 ہفتے کی ادائیگی", pay4: "4 ہفتے کی ادائیگی", paid: "ادا ہو گئی", payDue: "باقی", markPaid: "ادائیگی درج کریں",
     method: "طریقہ", payNumber: "اکاؤنٹ نمبر", amount: "رقم (روپے)", reference: "ٹرانزیکشن آئی ڈی",
-    payDate: "ادائیگی کی تاریخ", stat_pay2due: "2 ہفتے کی ادائیگیاں باقی", stat_pay4due: "4 ہفتے کی ادائیگیاں باقی",
+    stat_pay2due: "2 ہفتے کی ادائیگیاں باقی", stat_pay4due: "4 ہفتے کی ادائیگیاں باقی",
     stat_paidtoday: "آج ادا کی گئیں", stat_paidall: "اب تک ادا", pkr: "روپے", completed: "مکمل",
     savedPay: "ادائیگی محفوظ ہو گئی۔", needRef: "ٹرانزیکشن آئی ڈی لکھیں۔",
+    byEnum: "انیومریٹر کے حساب سے", target: "ہدف", details: "ہر انیومریٹر کی تفصیل",
+    checks: "جانچ", unmatched: "ایسے نمبروں سے فالو اپ جو تحقیق میں نہیں",
   },
 };
 const STATUS = {
   en: { not_started: "Not started", in_progress: "Started (open)", stopped: "Started, closed", completed: "Completed",
         partial: "Saw video, not finished", declined: "Declined consent", not_eligible: "—", not_yet: "Not yet due",
-        due: "Due", overdue: "Overdue", done: "Done", missed: "Missed (4-week took over)" },
+        due: "Due", overdue: "Overdue", done: "Done", missed: "Missed" },
   ur: { not_started: "شروع نہیں کیا", in_progress: "شروع (کھلا)", stopped: "شروع، بند", completed: "مکمل",
         partial: "ویڈیو دیکھی، مکمل نہیں", declined: "رضامندی نہیں دی", not_eligible: "—", not_yet: "ابھی وقت نہیں",
-        due: "وقت آ گیا", overdue: "تاخیر", done: "مکمل", missed: "رہ گیا (اب 4 ہفتے)" },
+        due: "وقت آ گیا", overdue: "تاخیر", done: "مکمل", missed: "رہ گیا" },
 };
 const ACTION = {
-  en: { main_invite: "Send the main survey link and ask them to fill it",
-        main_remind: "Remind to finish the main survey (same phone continues where they stopped)",
-        main_restart: "Ask them to fill the main survey again (their earlier attempt closed)",
+  en: { main_invite: "Send the main survey link",
+        main_remind: "Remind to finish the main survey on the same phone",
+        main_restart: "Ask them to fill the main survey again (earlier attempt closed)",
         wait_main: "Main survey in progress — wait",
-        fu2: "2-week follow-up: send link / call", fu4: "4-week follow-up: send link / call",
+        fu2: "2-week follow-up: send link / remind", fu4: "4-week follow-up: send link / remind",
         wait_fu: "Follow-up started today — wait", wait_followup: "Waiting for the next follow-up",
         all_done: "All surveys done", do_not_contact: "Do not contact" },
-  ur: { main_invite: "مرکزی سروے کا لنک بھیجیں اور مکمل کرنے کا کہیں",
-        main_remind: "مرکزی سروے مکمل کرنے کی یاد دہانی کرائیں (اسی فون پر وہیں سے جاری ہو گا)",
-        main_restart: "مرکزی سروے دوبارہ مکمل کرنے کا کہیں (پچھلی کوشش بند ہو چکی)",
+  ur: { main_invite: "مرکزی سروے کا لنک بھیجیں",
+        main_remind: "اسی فون پر مرکزی سروے مکمل کرنے کی یاد دہانی",
+        main_restart: "مرکزی سروے دوبارہ بھرنے کا کہیں (پچھلی کوشش بند ہو چکی)",
         wait_main: "مرکزی سروے جاری ہے — انتظار کریں",
-        fu2: "2 ہفتے کا فالو اپ: لنک بھیجیں / کال کریں", fu4: "4 ہفتے کا فالو اپ: لنک بھیجیں / کال کریں",
+        fu2: "2 ہفتے کا فالو اپ: لنک / یاد دہانی", fu4: "4 ہفتے کا فالو اپ: لنک / یاد دہانی",
         wait_fu: "فالو اپ آج شروع ہوا — انتظار کریں", wait_followup: "اگلے فالو اپ کا انتظار",
         all_done: "تمام سروے مکمل", do_not_contact: "رابطہ نہ کریں" },
 };
 const OUTCOMES = [
-  ["reached", "Reached — will fill it", "بات ہوئی — سروے کریں گے"],
-  ["reached_done", "Reached — says already done", "بات ہوئی — کہتے ہیں مکمل کر لیا"],
   ["whatsapp_sent", "WhatsApp message sent", "واٹس ایپ پیغام بھیجا"],
+  ["whatsapp_reply", "Replied on WhatsApp", "واٹس ایپ پر جواب آیا"],
+  ["reached", "Reached — will fill it", "بات ہوئی — سروے کریں گے"],
+  ["reached_done", "Says already done", "کہتے ہیں مکمل کر لیا"],
   ["no_answer", "No answer", "جواب نہیں دیا"],
   ["busy", "Busy", "مصروف"],
   ["switched_off", "Phone switched off", "فون بند"],
   ["call_back", "Asked to call back later", "بعد میں کال کرنے کا کہا"],
   ["wrong_number", "Wrong number", "غلط نمبر"],
-  ["refused", "Refused — do not contact again", "انکار — دوبارہ رابطہ نہ کریں"],
+  ["refused", "Not interested — do not contact again", "دلچسپی نہیں — دوبارہ رابطہ نہ کریں"],
 ];
 const PAY_OUTCOMES = [["paid_fu2", "Paid — 2-week (PKR 200)", "ادائیگی — 2 ہفتے (200 روپے)"],
                       ["paid_fu4", "Paid — 4-week (PKR 150)", "ادائیگی — 4 ہفتے (150 روپے)"]];
@@ -111,31 +122,37 @@ const MSG = {
   main_remind: "السلام علیکم {name}! آپ نے ہمارا سروے شروع کیا تھا لیکن وہ ابھی مکمل نہیں ہوا۔ براہِ کرم اسی فون پر یہ لنک کھولیں، سروے وہیں سے شروع ہو گا جہاں آپ نے چھوڑا تھا: {link}\nاگر سروے شروع سے کھلے تو اپنا موبائل نمبر اس طرح لکھیں: {phone}\nشکریہ",
   main_restart: "السلام علیکم {name}! آپ کا پچھلا سروے مکمل نہیں ہوا تھا اور اب بند ہو چکا ہے۔ براہِ کرم یہ لنک کھول کر سروے دوبارہ شروع سے مکمل کریں: {link}\nاپنا موبائل نمبر اس طرح لکھیں: {phone}\nشکریہ",
   fu2: "السلام علیکم {name}! ہمارے سروے میں حصہ لینے کا شکریہ۔ اب دو ہفتے بعد کا مختصر فالو اپ سروے حاضر ہے (تقریباً 10 منٹ): {link}\nاپنا موبائل نمبر اس طرح لکھیں: {phone}\nمکمل کرنے پر آپ کو 200 روپے بھیجے جائیں گے۔ شکریہ",
-  fu2_continue: "السلام علیکم {name}! آپ نے دو ہفتے والا فالو اپ سروے شروع کیا تھا۔ براہِ کرم اسی فون پر یہ لنک کھول کر مکمل کریں، سروے وہیں سے شروع ہو گا: {link}\nمکمل کرنے پر آپ کو 200 روپے بھیجے جائیں گے۔ شکریہ",
+  fu2_continue: "السلام علیکم {name}! آپ نے دو ہفتے والا فالو اپ سروے شروع کیا تھا ({pct} مکمل)۔ براہِ کرم اسی فون پر یہ لنک کھول کر مکمل کریں، سروے وہیں سے شروع ہو گا: {link}\nمکمل کرنے پر آپ کو 200 روپے بھیجے جائیں گے۔ شکریہ",
   fu2_again: "السلام علیکم {name}! آپ کا دو ہفتے والا فالو اپ سروے مکمل نہیں ہوا تھا۔ براہِ کرم یہ لنک کھول کر دوبارہ مکمل کریں: {link}\nاپنا موبائل نمبر اس طرح لکھیں: {phone}\nمکمل کرنے پر آپ کو 200 روپے بھیجے جائیں گے۔ شکریہ",
   fu4: "السلام علیکم {name}! یہ ہمارا آخری مختصر فالو اپ سروے ہے (تقریباً 10 منٹ): {link}\nاپنا موبائل نمبر اس طرح لکھیں: {phone}\nمکمل کرنے پر آپ کو 150 روپے بھیجے جائیں گے۔ شکریہ",
-  fu4_continue: "السلام علیکم {name}! آپ نے آخری فالو اپ سروے شروع کیا تھا۔ براہِ کرم اسی فون پر یہ لنک کھول کر مکمل کریں، سروے وہیں سے شروع ہو گا: {link}\nمکمل کرنے پر آپ کو 150 روپے بھیجے جائیں گے۔ شکریہ",
+  fu4_continue: "السلام علیکم {name}! آپ نے آخری فالو اپ سروے شروع کیا تھا ({pct} مکمل)۔ براہِ کرم اسی فون پر یہ لنک کھول کر مکمل کریں، سروے وہیں سے شروع ہو گا: {link}\nمکمل کرنے پر آپ کو 150 روپے بھیجے جائیں گے۔ شکریہ",
   fu4_again: "السلام علیکم {name}! آپ کا آخری فالو اپ سروے مکمل نہیں ہوا تھا۔ براہِ کرم یہ لنک کھول کر دوبارہ مکمل کریں: {link}\nاپنا موبائل نمبر اس طرح لکھیں: {phone}\nمکمل کرنے پر آپ کو 150 روپے بھیجے جائیں گے۔ شکریہ",
+  wait_next: "السلام علیکم {name}! ہمارے سروے میں حصہ لینے کا بہت شکریہ۔ اگلا مختصر فالو اپ سروے آپ کو {date} کو بھیجا جائے گا۔",
+  thanks: "السلام علیکم {name}! ہمارے تمام سروے مکمل کرنے کا بہت شکریہ۔ آپ کی رقم جاز کیش یا ایزی پیسہ کے ذریعے بھیجی جا رہی ہے۔",
 };
 const FU_ACTIVE = ["due", "overdue", "in_progress", "stopped"];
 const payDue = (p) => (p.pay2 && p.pay2.status === "due") || (p.pay4 && p.pay4.status === "due");
 const payPaid = (p) => (p.pay2 && p.pay2.status === "paid") || (p.pay4 && p.pay4.status === "paid");
-const FILTERS = [
-  ["today", (p) => p.call_today, "Call today", "آج کال کریں"],
-  ["all", () => true, "All", "سب"],
+const contactedToday = (p) => logsFor(p).some((l) => !String(l.outcome).startsWith("paid") && normDay(l.day || l.time) === today());
+/* main tabs (always visible) and the extra filters in the "More…" menu */
+const TABS = [
+  ["today", (p) => p.call_today && !contactedToday(p), "To do today", "آج کا کام"],
+  ["followup", (p) => FU_ACTIVE.includes(p.fu2_status) || FU_ACTIVE.includes(p.fu4_status), "Follow-ups", "فالو اپ"],
+  ["unfinished", (p) => ["in_progress", "stopped"].includes(p.main_status) || (p.compliance === "partial" && ["main_remind", "wait_main"].includes(p.action)), "Main not finished", "مرکزی نامکمل"],
   ["not_started", (p) => p.main_status === "not_started", "Not started", "شروع نہیں کیا"],
-  ["started", (p) => ["in_progress", "stopped"].includes(p.main_status), "Started, no video", "شروع، ویڈیو نہیں"],
+  ["contacted", contactedToday, "Contacted today", "آج رابطہ ہوا"],
+];
+const MORE = [
+  ["all", () => true, "All", "سب"],
   ["full", (p) => p.compliance === "full", "Full compliance", "مکمل شرکت"],
   ["partial", (p) => p.compliance === "partial", "Partial compliance", "جزوی شرکت"],
-  ["fu2", (p) => FU_ACTIVE.includes(p.fu2_status), "2-week due", "2 ہفتے باقی"],
-  ["fu4", (p) => FU_ACTIVE.includes(p.fu4_status), "4-week due", "4 ہفتے باقی"],
   ["fu2done", (p) => p.fu2_status === "done", "2-week done", "2 ہفتے مکمل"],
   ["fu4done", (p) => p.fu4_status === "done", "4-week done", "4 ہفتے مکمل"],
   ["paydue", payDue, "Payment pending", "ادائیگی باقی"],
   ["paid", payPaid, "Paid", "ادائیگی ہو گئی"],
   ["dnc", (p) => p.action === "do_not_contact", "Do not contact", "رابطہ نہ کریں"],
 ];
-const PAY_FILTERS = [
+const PAY_TABS = [
   ["pay2due", (p) => p.pay2.status === "due", "2-week due (PKR 200)", "2 ہفتے باقی (200)"],
   ["pay4due", (p) => p.pay4.status === "due", "4-week due (PKR 150)", "4 ہفتے باقی (150)"],
   ["paid", payPaid, "Paid", "ادا ہو گئی"],
@@ -149,6 +166,7 @@ let filter = "today", shown = PAGE, current = null, payCurrent = null;
 const t = (k) => (T[lang][k] ?? T.en[k] ?? k);
 const lbl = (row) => (lang === "ur" ? row[2] : row[1]);
 const isPay = () => D && D.role === "pay";
+const isAdmin = () => D && D.role === "admin";
 
 /* ---------------------------------------------------------------- crypto */
 const b64 = (s) => Uint8Array.from(atob(s), (c) => c.charCodeAt(0));
@@ -225,10 +243,12 @@ function applyLive(rows) {
   const byPid = new Map(D.people.map((p) => [p.pid, p]));
   rows.sort((a, b) => String(a.time).localeCompare(String(b.time)));
   for (const r of rows) {
-    const p = byPid.get(String(r.participant_id));
+    const pid = String(r.participant_id).replace(/\.0$/, "").padStart(6, "0");
+    const p = byPid.get(pid);
     if (!p) continue;
     p.calls = p.calls || [];
     if (p.calls.some((c) => c.log_id === r.log_id)) continue;
+    r.next_call = normDay(r.next_call); r.day = normDay(r.time);
     p.calls.push(r);
     applyOne(p, r);
   }
@@ -238,14 +258,15 @@ function applyLive(rows) {
 function applyOne(p, r) {    // what a new call / payment record changes on the card straight away
   const w = { paid_fu2: "pay2", paid_fu4: "pay4" }[r.outcome];
   if (w) {
-    p[w] = { ...(p[w] || {}), status: "paid", date: String(r.time).slice(0, 10), ref: r.reference || "",
+    p[w] = { ...(p[w] || {}), status: "paid", date: normDay(r.time), ref: r.reference || "",
              method: r.method || (p[w] || {}).method || "", number: r.pay_number || (p[w] || {}).number || "",
              amount: r.amount || (p[w] || {}).amount };
     return;
   }
   p.n_calls = (p.n_calls || 0) + 1;
-  if (String(r.time).slice(0, 10) === today()) p.call_today = false;
-  if (r.next_call) { p.next_call = r.next_call; if (r.next_call > today()) p.call_today = false; }
+  if (normDay(r.time) === today()) p.call_today = false;
+  const nc = normDay(r.next_call);
+  if (nc) { p.next_call = nc; if (nc > today()) p.call_today = false; }
   const tg = String(r.tags || "").split(",").filter(Boolean);
   p.tags = [...new Set([...(p.tags || []), ...tg])];
   if (r.outcome === "refused") { p.action = "do_not_contact"; p.call_today = false; }
@@ -289,8 +310,8 @@ async function record(p, fields, okMsg) {
 
 /* ---------------------------------------------------------------- main view */
 function fillSelects() {
-  const many = D.role === "admin" || D.role === "pay";
-  const tagSel = $("#tagSel"), enuSel = $("#enuSel");
+  const many = isAdmin() || isPay();
+  const tagSel = $("#tagSel"), enuSel = $("#enuSel"), moreSel = $("#moreSel");
   const keepTag = tagSel.value, keepEnu = enuSel.value;
   tagSel.innerHTML = ""; tagSel.hidden = isPay();
   tagSel.add(new Option(t("allTags"), ""));
@@ -298,10 +319,16 @@ function fillSelects() {
   enuSel.hidden = !many; enuSel.innerHTML = "";
   if (many) { enuSel.add(new Option(t("allEnus"), "")); D.enumerators.forEach((e) => enuSel.add(new Option(e, e))); }
   tagSel.value = keepTag; enuSel.value = keepEnu;
+  moreSel.hidden = isPay();
+  moreSel.innerHTML = "";
+  moreSel.add(new Option(t("moreFilters"), ""));
+  MORE.forEach((m) => moreSel.add(new Option(lang === "ur" ? m[3] : m[2], m[0])));
+  moreSel.value = MORE.some((m) => m[0] === filter) ? filter : "";
 }
 function setupMain() {
   fillSelects();
   ["#search", "#tagSel", "#enuSel"].forEach((s) => $(s).addEventListener("input", () => { shown = PAGE; render(); }));
+  $("#moreSel").addEventListener("change", (e) => { if (e.target.value) { filter = e.target.value; shown = PAGE; render(); } });
   $("#moreBtn").onclick = () => { shown += PAGE; renderList(); };
   $("#exportBtn").onclick = () => (isPay() ? exportPay() : exportCsv());
   $("#exportLogsBtn").onclick = exportLogs;
@@ -310,90 +337,139 @@ function base() {
   const e = $("#enuSel").value;
   return D.people.filter((p) => !e || p.enumerator === e);
 }
-function render() { renderStats(); renderAdmin(); renderChips(); renderList(); }
-const statCard = ([f, l, v, pct]) =>
-  `<button class="stat ${filter === f ? "hl" : ""}" data-f="${f}"><div class="n">${v}</div><div class="l">${l}</div>
-    ${pct === undefined ? "" : `<div class="bar"><span style="width:${pct.toFixed(1)}%"></span></div>`}</button>`;
+function render() { renderProgress(); renderStats(); renderAdmin(); renderTabs(); renderList(); }
+
+/* ---- progress to target: the same people through main, 2-week and 4-week ---- */
+function rounds(ps) {
+  const c = (f) => ps.filter(f).length;
+  return [
+    { key: "main", label: t("roundMain"), color: "var(--s1)", n: c((p) => p.compliance === "full"), extra: c((p) => p.compliance === "partial") },
+    { key: "fu2", label: t("round2"), color: "var(--s2)", n: c((p) => p.compliance === "full" && p.fu2_status === "done"),
+      extra: c((p) => p.compliance === "partial" && p.fu2_status === "done") },
+    { key: "fu4", label: t("round4"), color: "var(--s3)", n: c((p) => p.compliance === "full" && p.fu4_status === "done"),
+      extra: c((p) => p.compliance === "partial" && p.fu4_status === "done") },
+  ];
+}
+function renderProgress() {
+  const box = $("#progress");
+  if (isPay()) { box.hidden = true; return; }
+  box.hidden = false;
+  const ps = base();
+  const target = (D.target || 320) * (isAdmin() && !$("#enuSel").value ? D.enumerators.length : 1);
+  box.innerHTML = `<h3>${t("progress")} <span class="muted">${target.toLocaleString()} ${t("perRound")}</span></h3>
+    <div class="prog">${rounds(ps).map((r) => {
+      const pct = Math.min(100, (100 * r.n) / target);
+      return `<div class="prow"><div class="top-line"><span class="lab"><i class="sw" style="background:${r.color}"></i>${r.label}</span>
+        <span class="val">${r.n.toLocaleString()} <small>/ ${target.toLocaleString()} · ${pct.toFixed(0)}%</small></span></div>
+        <div class="meter" role="img" aria-label="${r.label}: ${r.n} ${t("of")} ${target}"><span style="width:${pct.toFixed(1)}%;background:${r.color}"></span></div>
+        ${r.extra ? `<div class="sub">${t("plusPartial").replace("{n}", r.extra)}</div>` : ""}</div>`;
+    }).join("")}</div>`;
+}
+
+/* ---- PAY tiles ---- */
+const statCard = ([f, l, v]) =>
+  `<button class="stat ${filter === f ? "hl" : ""}" data-f="${f}"><div class="n">${v}</div><div class="l">${l}</div></button>`;
 function renderStats() {
+  const box = $("#stats");
+  if (!isPay()) { box.hidden = true; return; }
+  box.hidden = false;
   const ps = base();
   const n = (f) => ps.filter(f).length;
-  let cards;
-  if (isPay()) {
-    const sum = (k, st) => ps.filter((p) => p[k].status === st).reduce((s, p) => s + Number(p[k].amount || 0), 0);
-    const paidOn = (d) => ps.reduce((s, p) => s + ["pay2", "pay4"].filter((k) => p[k].status === "paid" && p[k].date === d).length, 0);
-    cards = [
-      ["pay2due", t("stat_pay2due"), `${n((p) => p.pay2.status === "due")} · ${t("pkr")} ${sum("pay2", "due").toLocaleString()}`],
-      ["pay4due", t("stat_pay4due"), `${n((p) => p.pay4.status === "due")} · ${t("pkr")} ${sum("pay4", "due").toLocaleString()}`],
-      ["paid", t("stat_paidtoday"), paidOn(today()).toLocaleString()],
-      ["paid", t("stat_paidall"), `${ps.reduce((s, p) => s + ["pay2", "pay4"].filter((k) => p[k].status === "paid").length, 0)} · ${t("pkr")} ${(sum("pay2", "paid") + sum("pay4", "paid")).toLocaleString()}`],
-    ];
-  } else {
-    const target = (D.target || 300) * (D.role === "admin" && !$("#enuSel").value ? D.enumerators.length : 1);
-    const full = n((p) => p.compliance === "full"), part = n((p) => p.compliance === "partial");
-    const split = (st) => `${n((p) => p.compliance === "full" && p[st] === "done")} + ${n((p) => p.compliance === "partial" && p[st] === "done")}`;
-    const paidN = ps.reduce((s, p) => s + ["pay2", "pay4"].filter((k) => p[k] && p[k].status === "paid").length, 0);
-    const dueN = ps.reduce((s, p) => s + ["pay2", "pay4"].filter((k) => p[k] && p[k].status === "due").length, 0);
-    cards = [
-      ["full", t("stat_full"), `${full.toLocaleString()} / ${target.toLocaleString()}`, Math.min(100, (100 * full) / target)],
-      ["partial", t("stat_partial"), part.toLocaleString()],
-      ["today", t("stat_today"), n((p) => p.call_today).toLocaleString()],
-      ["started", t("stat_inprog"), n((p) => ["in_progress", "stopped"].includes(p.main_status)).toLocaleString()],
-      ["fu2done", t("stat_fu2done"), split("fu2_status")],
-      ["fu4done", t("stat_fu4done"), split("fu4_status")],
-      ["fu2", t("stat_fudue"), n((p) => ["fu2", "fu4"].includes(p.action)).toLocaleString()],
-      ["paydue", t("stat_paystate"), `${paidN} / ${dueN}`],
-    ];
-  }
-  $("#stats").innerHTML = cards.map(statCard).join("");
-  $("#stats").querySelectorAll(".stat").forEach((b) => b.onclick = () => { filter = b.dataset.f; shown = PAGE; render(); });
+  const sum = (k, st) => ps.filter((p) => p[k].status === st).reduce((s, p) => s + Number(p[k].amount || 0), 0);
+  const paidOn = (d) => ps.reduce((s, p) => s + ["pay2", "pay4"].filter((k) => p[k].status === "paid" && p[k].date === d).length, 0);
+  const cards = [
+    ["pay2due", t("stat_pay2due"), `${n((p) => p.pay2.status === "due")} · ${t("pkr")} ${sum("pay2", "due").toLocaleString()}`],
+    ["pay4due", t("stat_pay4due"), `${n((p) => p.pay4.status === "due")} · ${t("pkr")} ${sum("pay4", "due").toLocaleString()}`],
+    ["paid", t("stat_paidtoday"), paidOn(today()).toLocaleString()],
+    ["paid", t("stat_paidall"), `${ps.reduce((s, p) => s + ["pay2", "pay4"].filter((k) => p[k].status === "paid").length, 0)} · ${t("pkr")} ${(sum("pay2", "paid") + sum("pay4", "paid")).toLocaleString()}`],
+  ];
+  box.innerHTML = cards.map(statCard).join("");
+  box.querySelectorAll(".stat").forEach((b) => b.onclick = () => { filter = b.dataset.f; shown = PAGE; render(); });
+}
+
+/* ---- ADMIN: chart by enumerator + collapsible details ---- */
+function adminChart() {
+  const E = D.enumerators, tgt = D.target || 320;
+  const data = E.map((e) => ({ e, r: rounds(D.people.filter((p) => p.enumerator === e)) }));
+  const ymax = Math.max(tgt, ...data.flatMap((d) => d.r.map((x) => x.n))) * 1.08;
+  const W = 720, H = 260, m = { l: 34, r: 8, t: 14, b: 26 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b, gw = iw / E.length, bw = Math.min(16, (gw - 14) / 3);
+  const y = (v) => m.t + ih - (v / ymax) * ih;
+  const ticks = [0, 80, 160, 240, 320, 400, 480].filter((v) => v <= ymax);
+  const bar = (x, v, color) => {         // 4px rounded top, square on the baseline
+    const h = Math.max(0, y(0) - y(v)); if (!h) return "";
+    const r = Math.min(4, h, bw / 2), y0 = y(0), y1 = y(v);
+    return `<path d="M${x},${y0} V${y1 + r} Q${x},${y1} ${x + r},${y1} H${x + bw - r} Q${x + bw},${y1} ${x + bw},${y1 + r} V${y0} Z" fill="${color}"/>`;
+  };
+  let g = ticks.map((v) => `<line class="gridline" x1="${m.l}" x2="${W - m.r}" y1="${y(v)}" y2="${y(v)}"/><text class="axis" x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join("");
+  data.forEach((d, i) => {
+    const x0 = m.l + i * gw + (gw - (3 * bw + 4)) / 2;
+    g += d.r.map((r, k) => bar(x0 + k * (bw + 2), r.n, r.color)).join("");
+    g += `<text class="axis" x="${m.l + i * gw + gw / 2}" y="${H - 8}" text-anchor="middle">${d.e.replace("ENU", "")}</text>`;
+    g += `<rect class="hit" data-i="${i}" x="${m.l + i * gw}" y="${m.t}" width="${gw}" height="${ih}"/>`;
+  });
+  g += `<line class="target" x1="${m.l}" x2="${W - m.r}" y1="${y(tgt)}" y2="${y(tgt)}"/>
+        <text class="tlabel" x="${W - m.r}" y="${y(tgt) - 5}" text-anchor="end">${t("target")} ${tgt}</text>`;
+  return { svg: `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="${t("byEnum")}">${g}</svg>`, data };
 }
 function renderAdmin() {
   const panel = $("#adminPanel");
-  if (D.role !== "admin") { panel.hidden = true; return; }
+  if (!isAdmin()) { panel.hidden = true; return; }
   panel.hidden = false;
+  const ch = adminChart();
+  const legend = rounds([]).map((r) => `<span><i class="sw" style="background:${r.color}"></i>${r.label}</span>`).join("");
   const rows = D.enumerators.map((e) => {
     const ps = D.people.filter((p) => p.enumerator === e);
     const c = (f) => ps.filter(f).length;
-    const done = c((p) => p.compliance === "full");
-    const fp = (st, k) => c((p) => p.compliance === k && p[st] === "done");
+    const r = rounds(ps);
     const pays = (st) => ps.reduce((s, p) => s + ["pay2", "pay4"].filter((k) => p[k] && p[k].status === st).length, 0);
-    return `<tr><td>${e}</td><td>${ps.length}</td><td>${done}</td><td>${(100 * done / (D.target || 300)).toFixed(0)}%</td>
-      <td>${c((p) => p.compliance === "partial")}</td>
-      <td>${c((p) => ["in_progress", "stopped"].includes(p.main_status))}</td><td>${c((p) => p.call_today)}</td>
-      <td>${fp("fu2_status", "full")} + ${fp("fu2_status", "partial")}</td><td>${fp("fu4_status", "full")} + ${fp("fu4_status", "partial")}</td>
-      <td>${c((p) => p.fu2_status === "overdue" || p.fu4_status === "overdue")}</td>
-      <td>${pays("paid")} / ${pays("due")}</td>
-      <td>${ps.reduce((s, p) => s + (p.n_calls || 0), 0)}</td>
-      <td>${ps.reduce((s, p) => s + (p.calls || []).filter((x) => String(x.time).slice(0, 10) === today() && !String(x.outcome).startsWith("paid")).length, 0)}</td></tr>`;
+    return `<tr><td>${e}</td><td>${ps.length}</td><td>${r[0].n} <span class="muted">+${r[0].extra}</span></td>
+      <td>${r[1].n} <span class="muted">+${r[1].extra}</span></td><td>${r[2].n} <span class="muted">+${r[2].extra}</span></td>
+      <td>${c((p) => FU_ACTIVE.includes(p.fu2_status) || FU_ACTIVE.includes(p.fu4_status))}</td>
+      <td>${c((p) => p.call_today)}</td><td>${pays("paid")} / ${pays("due")}</td>
+      <td>${ps.reduce((s, p) => s + (p.n_calls || 0), 0)}</td><td>${c(contactedToday)}</td></tr>`;
   }).join("");
   const um = D.unmatched || [];
   const flags = [
     ["Under 18", D.people.filter((p) => p.under_18 === "Yes").length],
     ["Completed main survey twice (pay once)", D.people.filter((p) => p.n_completed > 1).length],
-    ["Partial compliance: saw a video, not finished (in follow-ups, never restarted)", D.people.filter((p) => p.compliance === "partial").length],
     ["Shown a video in more than one attempt", D.people.filter((p) => p.n_video_attempts > 1).length],
-    ["Declined consent / refused", D.people.filter((p) => p.action === "do_not_contact").length],
-    ["2-week missed (4-week took over)", D.people.filter((p) => p.fu2_status === "missed").length],
-    ["Follow-ups from numbers not in the study", um.length],
+    ["Declined consent / not interested", D.people.filter((p) => p.action === "do_not_contact").length],
+    ["2-week missed", D.people.filter((p) => p.fu2_status === "missed").length],
+    [t("unmatched"), um.length],
   ];
-  panel.innerHTML = `<div class="admin-scroll"><table class="admin-table"><thead><tr><th>Enumerator</th><th>People</th>
-    <th>Full</th><th>% of ${D.target || 300}</th><th>Partial</th><th>Started (no video)</th><th>Call today</th>
-    <th>2-wk done (full + partial)</th><th>4-wk done (full + partial)</th><th>Overdue</th><th>Payments paid / due</th>
-    <th>Calls (all)</th><th>Calls today</th></tr></thead><tbody>${rows}</tbody></table></div>
-    <div class="chips">${flags.map(([l, v]) => `<span class="b ${v ? "warn" : ""}">${l}: ${v}</span>`).join("")}</div>
-    ${um.length ? `<details class="hist"><summary>Follow-ups from numbers not in the study (${um.length}) — match them by hand</summary><ul>
-      ${um.map((u) => `<li>${esc(u.wave)} · ${esc(u.date)} · typed: ${esc(u.phone_typed)} · ${esc(u.name)} · ${u.finished ? "finished" : "not finished"} · ${esc(u.response_id)}</li>`).join("")}</ul></details>` : ""}`;
+  panel.innerHTML = `<section class="panel chart"><h3>${t("byEnum")} <span class="muted">full compliance; partial in the table</span></h3>
+      <div class="legend">${legend}<span><i class="sw" style="background:transparent;border-top:2px dashed var(--ink-2);height:0;width:14px;border-radius:0"></i>${t("target")} ${D.target || 320}</span></div>${ch.svg}</section>
+    <details class="box"><summary>${t("details")}</summary><div class="admin-scroll"><table class="admin-table"><thead><tr>
+      <th>Enumerator</th><th>People</th><th>Main (full +partial)</th><th>2-week</th><th>4-week</th><th>Follow-ups open</th>
+      <th>To do today</th><th>Payments paid / due</th><th>Calls</th><th>Contacted today</th></tr></thead><tbody>${rows}</tbody></table></div></details>
+    <details class="box"><summary>${t("checks")}</summary><div class="flags">${flags.map(([l, v]) => `<span class="b ${v ? "warn" : ""}">${l}: ${v}</span>`).join("")}</div>
+      ${um.length ? `<ul class="small muted">${um.map((u) => `<li>${esc(u.wave)} · ${esc(u.date)} · typed: ${esc(u.phone_typed)} · ${esc(u.name)} · ${u.finished ? "finished" : "not finished"}</li>`).join("")}</ul>` : ""}</details>`;
+  const tip = $("#tip");
+  panel.querySelectorAll(".hit").forEach((h) => {
+    const d = ch.data[+h.dataset.i];
+    h.addEventListener("mousemove", (ev) => {
+      tip.innerHTML = `<b>${d.e}</b><br>${d.r.map((r) => `${r.label}: ${r.n} (+${r.extra} partial)`).join("<br>")}`;
+      tip.hidden = false; tip.style.left = `${Math.min(ev.clientX + 12, innerWidth - 250)}px`; tip.style.top = `${ev.clientY + 12}px`;
+    });
+    h.addEventListener("mouseleave", () => { tip.hidden = true; });
+  });
 }
-function renderChips() {
+
+/* ---- tabs + list ---- */
+function renderTabs() {
   const ps = base();
-  const list = isPay() ? PAY_FILTERS : FILTERS;
+  const list = isPay() ? PAY_TABS : TABS;
   $("#chips").innerHTML = list.map(([k, f, en, ur]) =>
-    `<button class="chip ${filter === k ? "on" : ""}" data-k="${k}">${lang === "ur" ? ur : en}<span class="k">${ps.filter(f).length}</span></button>`).join("");
-  $("#chips").querySelectorAll(".chip").forEach((b) => b.onclick = () => { filter = b.dataset.k; shown = PAGE; render(); });
+    `<button class="tab ${filter === k ? "on" : ""}" role="tab" data-k="${k}">${lang === "ur" ? ur : en}<span class="k">${ps.filter(f).length}</span></button>`).join("");
+  $("#chips").querySelectorAll(".tab").forEach((b) => b.onclick = () => { filter = b.dataset.k; shown = PAGE; $("#moreSel").value = ""; render(); });
+  const ms = $("#moreSel");
+  ms.classList.toggle("on", MORE.some((m) => m[0] === filter));
+  if (!isPay()) ms.value = MORE.some((m) => m[0] === filter) ? filter : "";
 }
 function filtered() {
-  const list = isPay() ? PAY_FILTERS : FILTERS;
-  const f = (list.find((x) => x[0] === filter) || list[list.length - 1])[1];
+  const list = isPay() ? PAY_TABS : [...TABS, ...MORE];
+  const f = (list.find((x) => x[0] === filter) || list[0])[1];
   const q = $("#search").value.trim().toLowerCase();
   const tag = isPay() ? "" : $("#tagSel").value;
   const rank = { fu4: 0, fu2: 1, main_remind: 2, main_restart: 2, main_invite: 3 };
@@ -408,27 +484,32 @@ const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "
 const tone = (s) => ({ completed: "ok", done: "ok", paid: "ok", in_progress: "info", partial: "info", due: "warn",
   stopped: "warn", overdue: "bad", declined: "bad", missed: "bad" }[s] || "");
 function badge(label, s, extra = "") {
-  if (s === "not_eligible") return "";
+  if (!s || s === "not_eligible") return "";
   return `<span class="b ${tone(s)}">${label}: ${STATUS[lang][s] || s}${extra}</span>`;
 }
 function payBadge(label, pay) {
   if (!pay || pay.status === "not_due") return "";
   return pay.status === "paid"
-    ? `<span class="b ok">${label}: ${t("paid")} ✓ ${esc(pay.date)}</span>`
-    : `<span class="b warn">${label}: ${t("payDue")} (${t("pkr")} ${esc(pay.amount)})</span>`;
+    ? `<span class="b ok">${label}: ${t("paid")} ✓</span>`
+    : `<span class="b warn">${label}: ${t("payDue")}</span>`;
 }
-function waLink(p) {
-  let key = "";
-  if (p.link === "main") key = p.action === "main_invite" ? "main_invite" : (p.main_status === "stopped" ? "main_restart" : "main_remind");
-  else if (p.link === "fu2" || p.link === "fu4") {
-    const st = p[`${p.link}_status`];
-    key = p.link + (st === "in_progress" ? "_continue" : st === "stopped" ? "_again" : "");
-  }
-  const tpl = MSG[key] || "";
-  const link = (D.links || {})[p.link] || "";
-  const text = tpl ? tpl.replace("{name}", p.name || "").replace("{link}", link).replace("{phone}", p.phone) : "";
-  return `https://wa.me/92${p.phone.slice(1)}${text ? "?text=" + encodeURIComponent(text) : ""}`;
+/* the WhatsApp message always matches the person's current state (also while waiting) */
+function waMessage(p) {
+  let key = "", link = "";
+  const fuKey = (w) => w + ({ in_progress: "_continue", stopped: "_again" }[p[`${w}_status`]] || "");
+  if (FU_ACTIVE.includes(p.fu4_status)) { key = fuKey("fu4"); link = "fu4"; }
+  else if (FU_ACTIVE.includes(p.fu2_status)) { key = fuKey("fu2"); link = "fu2"; }
+  else if (p.main_status === "not_started") { key = "main_invite"; link = "main"; }
+  else if (p.main_status === "in_progress" || (p.compliance === "partial" && ["main_remind", "wait_main"].includes(p.action))) { key = "main_remind"; link = "main"; }
+  else if (p.main_status === "stopped") { key = "main_restart"; link = "main"; }
+  else if (p.action === "all_done") key = "thanks";
+  else if (p.compliance) key = "wait_next";
+  const w = link === "fu4" ? "fu4" : "fu2";
+  const nextDate = p.fu2_status === "not_yet" ? p.fu2_due : p.fu4_due;
+  return (MSG[key] || "").replace("{name}", p.name || "").replace("{link}", (D.links || {})[link] || "")
+    .replace("{phone}", p.phone).replace("{date}", nextDate || "").replace("{pct}", `${p[`${w}_progress`] || 0}%`);
 }
+const waLink = (p) => `https://api.whatsapp.com/send?phone=92${p.phone.slice(1)}&text=${encodeURIComponent(waMessage(p))}`;
 function renderList() {
   const all = filtered();
   const items = all.slice(0, shown);
@@ -444,24 +525,32 @@ function histList(logs) {
     ${l.reference ? "· " + esc(l.reference) : ""}${l.note ? " · " + esc(l.note) : ""}${l._pending ? ` <i>(${t("pending")})</i>` : ""}</li>`).join("")}</ul>`
     : `<p>${t("noCalls")}</p>`;
 }
+function fuBadge(p, w, label) {
+  const st = p[`${w}_status`];
+  if (!st || st === "not_eligible") return "";
+  let extra = "";
+  if (["in_progress", "stopped"].includes(st)) extra = ` · ${p[`${w}_progress`] || 0}%`;
+  else if (["due", "overdue", "not_yet"].includes(st)) extra = ` · ${p[`${w}_due`]}`;
+  return badge(label, st, extra);
+}
 function personCard(p) {
   const logs = logsFor(p);
-  const prog = ["in_progress", "stopped", "partial"].includes(p.main_status) ? ` ${p.main_progress}%` : "";
-  const due = (w) => (["due", "overdue", "not_yet", "in_progress", "stopped"].includes(p[`${w}_status`]) ? ` · ${p[`${w}_due`]}` : "");
+  const prog = ["in_progress", "stopped", "partial"].includes(p.main_status) ? ` · ${p.main_progress}%` : "";
   const canMsg = p.action !== "do_not_contact";
   const tags = [...new Set([...(p.tags || []), ...logs.filter((l) => l._pending).flatMap((l) => String(l.tags || "").split(",").filter(Boolean))])];
-  return `<article class="card ${p.call_today ? "today" : ""}">
+  const comp = p.compliance ? `<span class="b ${p.compliance === "full" ? "ok" : "info"} strong">${t(p.compliance)}</span>` : "";
+  const mainB = p.compliance === "full" ? "" : badge(t("main"), p.main_status, prog);   // full compliance already says it
+  return `<article class="card ${p.call_today && !contactedToday(p) ? "today" : ""}">
     <div class="row1"><span class="nm">${esc(p.name) || "—"}</span>
-      <span class="meta">${p.pid} · ${p.phone}${D.role === "admin" ? " · " + p.enumerator : ""}</span></div>
-    <div class="meta">${esc([p.district, p.province].filter(Boolean).join(", "))}</div>
-    <div class="badges">${p.compliance ? `<span class="b ${p.compliance === "full" ? "ok" : "info"} strong">${t(p.compliance)}</span>` : ""}${badge(t("main"), p.main_status, prog)}${badge(t("w2"), p.fu2_status, due("fu2"))}${badge(t("w4"), p.fu4_status, due("fu4"))}
+      <span class="meta">${p.pid} · ${p.phone}${isAdmin() ? " · " + p.enumerator : ""}</span></div>
+    <div class="badges">${comp}${mainB}${fuBadge(p, "fu2", t("w2"))}${fuBadge(p, "fu4", t("w4"))}
       ${payBadge(t("pay2"), p.pay2)}${payBadge(t("pay4"), p.pay4)}
-      ${D.role === "admin" && p.under_18 === "Yes" ? '<span class="b bad">Under 18</span>' : ""}</div>
-    <div class="act">➜ <b>${ACTION[lang][p.action] || p.action}</b>${p.next_call ? ` · ${t("nextCall").split(" (")[0]}: ${p.next_call}` : ""}</div>
+      ${isAdmin() && p.under_18 === "Yes" ? '<span class="b bad">Under 18</span>' : ""}</div>
+    <div class="act">➜ <b>${ACTION[lang][p.action] || p.action}</b>${p.next_call ? ` · ${t("nextCallShort")}: ${p.next_call}` : ""}</div>
     ${tags.length ? `<div class="tagline">${tags.map((g) => `<span class="tg">${esc(lbl(TAGS.find((x) => x[0] === g) || [g, g, g]))}</span>`).join("")}</div>` : ""}
-    <div class="btns" style="margin-top:8px">
+    <div class="btns">
       <a class="btn" href="tel:${p.phone}">📞 ${t("call")}</a>
-      <a class="btn" ${canMsg ? `href="${waLink(p)}" target="_blank" rel="noopener"` : 'aria-disabled="true" style="opacity:.45;pointer-events:none"'}>💬 ${t("wa")}</a>
+      <a class="btn" ${canMsg ? `href="${waLink(p)}" target="_blank" rel="noopener"` : 'aria-disabled="true"'}>💬 ${t("wa")}</a>
       <button class="btn primary" data-log="${p.pid}">✎ ${t("log")}</button>
     </div>
     <details class="hist"><summary>${t("history")} (${logs.length})</summary>${histList(logs)}</details></article>`;
@@ -479,7 +568,6 @@ function payCard(p) {
   };
   return `<article class="card ${payDue(p) ? "today" : ""}">
     <div class="row1"><span class="nm">${esc(p.name) || "—"}</span><span class="meta">${p.pid} · ${p.phone} · ${p.enumerator}</span></div>
-    <div class="meta">${esc([p.district, p.province].filter(Boolean).join(", "))}</div>
     ${block("pay2", t("pay2"), p.fu2_date)}${block("pay4", t("pay4"), p.fu4_date)}
     <details class="hist"><summary>${t("history")} (${logs.length})</summary>${histList(logs)}</details></article>`;
 }
@@ -537,7 +625,7 @@ function download(name, rows) {
 }
 function exportCsv() {
   const cols = ["pid", "enumerator", "name", "phone", "district", "province", "main_status", "main_progress", "main_done",
-    "compliance", "fu2_status", "fu2_due", "fu4_status", "fu4_due", "action", "next_call", "n_calls"];
+    "compliance", "fu2_status", "fu2_progress", "fu2_due", "fu4_status", "fu4_progress", "fu4_due", "action", "next_call", "n_calls"];
   download(`${D.code}_list_${today()}.csv`, [[...cols, "pay_2week", "pay_4week"],
     ...filtered().map((p) => [...cols.map((c) => p[c]), (p.pay2 || {}).status, (p.pay4 || {}).status])]);
 }

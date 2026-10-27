@@ -1,6 +1,17 @@
 {
   "study_prefix": "SS",
-  "enumerators": ["ENU01", "ENU02", "ENU03", "ENU04", "ENU05", "ENU06", "ENU07", "ENU08", "ENU09", "ENU10"],
+  "enumerators": [
+    "ENU01",
+    "ENU02",
+    "ENU03",
+    "ENU04",
+    "ENU05",
+    "ENU06",
+    "ENU07",
+    "ENU08",
+    "ENU09",
+    "ENU10"
+  ],
   "seed_master": "../qualtrics/MASTER_contacts_20261022.xlsx",
   "links": {
     "main": "https://kdischool.asia.qualtrics.com/jfe/form/SV_09uyLqGV9e3rFDU?Q_Language=UR",
@@ -12,7 +23,7 @@
   "fu4_day": 28,
   "window_days": 7,
   "stall_days": 2,
-  "target_per_enumerator": 300,
+  "target_per_enumerator": 320,
   "pay_fu2": 200,
   "pay_fu4": 150
 }

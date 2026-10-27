@@ -71,7 +71,7 @@ A phone-friendly web page with three kinds of login:
 **Main survey.** Not started → send link. Started, no video yet: open session →
 remind after 2 days (same phone continues); closed → start again. **Saw a video** →
 *partial compliance*, never restarted (would re-randomise the video). *Full
-compliance* = finished (target 300 per enumerator).
+compliance* = finished (target 320 per enumerator per round: the same people through main, 2-week and 4-week).
 
 **2-week / 4-week follow-ups** (for full and partial compliance; days counted from
 completion, or from the day the video was watched for partial compliance):
@@ -109,7 +109,9 @@ If the push is rejected: `git pull --rebase`, then `git push` again.
 
 ## Changing things
 
-* `config.json`: follow-up days, overdue window, reminder delay, target, payment amounts.
+* `config.json`: follow-up days, overdue window, reminder delay, target (`target_per_enumerator`), payment amounts.
+* After changing `docs/app.js` or `docs/style.css`, raise the `?v=` number in `docs/index.html`
+  so phones load the new version instead of a cached copy.
 * New login or a leaked passphrase: delete that entry from `secrets/passphrases.json`,
   run `update.py` (it creates a new one), paste `TOKENS` into Apps Script again.
 * `state/people.csv` is the master list (ID ↔ phone ↔ enumerator), backed up on every
