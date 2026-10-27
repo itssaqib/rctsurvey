@@ -569,10 +569,7 @@ def build_person(i, s, mains, fu2, fu4, logs):
     actionable = action in ("main_invite", "main_remind", "main_restart", "fu2", "fu4")
     called_today = bool(last and last.get("day", str(last.get("time", ""))[:10]) == TODAY.isoformat())
     call_today = (actionable and not wrong and not called_today and (not next_call or next_call <= TODAY.isoformat()))
-    try:
-        age = int(float(s.age))
-    except (TypeError, ValueError):
-        age = None
+    # age is not used: under-18 participants are treated like everyone else (team decision, 27 Oct)
     return {
         "pid": s.participant_id, "enumerator": s.enumerator, "name": s["name"] or "",
         "phone": s.phone, "district": s.district or "", "province": s.province or "", "city": s.city or "",
@@ -586,7 +583,6 @@ def build_person(i, s, mains, fu2, fu4, logs):
         "pay2": pay2, "pay4": pay4,
         "action": action, "link": link, "call_today": bool(call_today), "next_call": next_call,
         "tags": tags, "calls": logs[-8:], "n_calls": len(last_call),
-        "age": "" if age is None else age, "under_18": "" if age is None else ("Yes" if age < 18 else "No"),
         "gender": s.gender or "",
     }
 

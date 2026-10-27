@@ -431,7 +431,6 @@ function renderAdmin() {
   }).join("");
   const um = D.unmatched || [];
   const flags = [
-    ["Under 18", D.people.filter((p) => p.under_18 === "Yes").length],
     ["Completed main survey twice (pay once)", D.people.filter((p) => p.n_completed > 1).length],
     ["Shown a video in more than one attempt", D.people.filter((p) => p.n_video_attempts > 1).length],
     ["Declined consent / not interested", D.people.filter((p) => p.action === "do_not_contact").length],
@@ -545,7 +544,7 @@ function personCard(p) {
       <span class="meta">${p.pid} · ${p.phone}${isAdmin() ? " · " + p.enumerator : ""}</span></div>
     <div class="badges">${comp}${mainB}${fuBadge(p, "fu2", t("w2"))}${fuBadge(p, "fu4", t("w4"))}
       ${payBadge(t("pay2"), p.pay2)}${payBadge(t("pay4"), p.pay4)}
-      ${isAdmin() && p.under_18 === "Yes" ? '<span class="b bad">Under 18</span>' : ""}</div>
+</div>
     <div class="act">➜ <b>${ACTION[lang][p.action] || p.action}</b>${p.next_call ? ` · ${t("nextCallShort")}: ${p.next_call}` : ""}</div>
     ${tags.length ? `<div class="tagline">${tags.map((g) => `<span class="tg">${esc(lbl(TAGS.find((x) => x[0] === g) || [g, g, g]))}</span>`).join("")}</div>` : ""}
     <div class="btns">
