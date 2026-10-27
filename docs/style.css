@@ -172,3 +172,6 @@ dialog h2 { margin: 0; font-size: 18px; }
 .dlg-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 .toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--ink); color: var(--card);
   padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 20; max-width: calc(100vw - 32px); }
+
+.field-title { margin: 14px 0 0; font-weight: 700; font-size: 14px; }
+dialog .field > span { display: block; }

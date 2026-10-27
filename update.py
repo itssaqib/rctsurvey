@@ -519,8 +519,10 @@ def build_person(i, s, mains, fu2, fu4, logs):
     last_call = [l for l in logs if not str(l.get("outcome", "")).startswith("paid")]
     last = last_call[-1] if last_call else None
     tags = sorted({t.strip() for l in last_call for t in str(l.get("tags", "")).split(",") if t.strip()})
-    refused = bool(last and last.get("outcome") == "refused") or "refused" in tags
-    wrong = "wrong_number" in tags
+    # one entry can combine a WhatsApp result and a call result: "whatsapp_sent+no_answer"
+    parts = lambda l: str(l.get("outcome", "")).split("+")
+    refused = bool(last and "refused" in parts(last)) or "refused" in tags
+    wrong = "wrong_number" in tags or bool(last and "wrong_number" in parts(last))
 
     def pay(w, amount):
         rec = fu_rec[w]

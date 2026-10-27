@@ -7,7 +7,7 @@
 <title>Fieldwork Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Nastaliq+Urdu:wght@400;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=20261027b">
+<link rel="stylesheet" href="style.css?v=20261027c">
 </head>
 <body>
 <div id="app">
@@ -84,9 +84,9 @@
     <form method="dialog" id="logForm">
       <h2 id="logTitle"></h2>
       <p class="muted small" id="logSub"></p>
-      <label class="field"><span data-t="outcome">What happened?</span>
-        <select id="outcome" required></select>
-      </label>
+      <p class="field-title" data-t="outcome">What happened?</p>
+      <div class="field"><span>💬 <span data-t="waPart">WhatsApp</span></span><div id="waPick" class="chips"></div></div>
+      <div class="field"><span>📞 <span data-t="callPart">Phone call</span></span><div id="callPick" class="chips"></div></div>
       <div class="field"><span data-t="tags">Tags</span><div id="tagPick" class="chips"></div></div>
       <label class="field"><span data-t="nextCall">Next call date (optional)</span>
         <input id="nextCall" type="date">
@@ -121,6 +121,6 @@
   <div id="tip" class="tip" hidden></div>
   <div id="toast" class="toast" hidden></div>
 </div>
-<script src="app.js?v=20261027b"></script>
+<script src="app.js?v=20261027c"></script>
 </body>
 </html>

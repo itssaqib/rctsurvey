@@ -28,7 +28,8 @@ const T = {
     title: "Fieldwork Tracker", subtitle: "Sunni–Shia study · participant follow-up", code: "Your code",
     passphrase: "Passphrase", remember: "Remember on this phone", open: "Open my list", updated: "Updated",
     logout: "Log out", search: "Search name, ID or phone", export: "Download list (CSV)",
-    exportLogs: "Download my unsent logs", more: "Show more", outcome: "What happened?", tags: "Tags",
+    exportLogs: "Download my unsent logs", more: "Show more", outcome: "What happened?", tags: "Tags", waPart: "WhatsApp", callPart: "Phone call",
+    pickOne: "Choose what happened (WhatsApp, call or both).",
     nextCall: "Next call date (optional)", note: "Note (optional)", cancel: "Cancel", save: "Save",
     badPass: "Wrong code or passphrase.", noData: "No data file for this code yet.", allTags: "All tags",
     allEnus: "All enumerators", shown: "shown", call: "Call", wa: "WhatsApp", log: "Log call",
@@ -52,7 +53,8 @@ const T = {
     title: "فیلڈ ورک ٹریکر", subtitle: "سنی–شیعہ تحقیق · شرکاء سے رابطہ", code: "آپ کا کوڈ",
     passphrase: "پاس فریز", remember: "اس فون پر یاد رکھیں", open: "میری فہرست کھولیں", updated: "اپ ڈیٹ",
     logout: "لاگ آؤٹ", search: "نام، آئی ڈی یا نمبر تلاش کریں", export: "فہرست ڈاؤن لوڈ کریں (CSV)",
-    exportLogs: "نہ بھیجی گئی کالز ڈاؤن لوڈ کریں", more: "مزید دکھائیں", outcome: "کیا ہوا؟", tags: "ٹیگ",
+    exportLogs: "نہ بھیجی گئی کالز ڈاؤن لوڈ کریں", more: "مزید دکھائیں", outcome: "کیا ہوا؟", tags: "ٹیگ", waPart: "واٹس ایپ", callPart: "فون کال",
+    pickOne: "بتائیں کیا ہوا (واٹس ایپ، کال یا دونوں)۔",
     nextCall: "اگلی کال کی تاریخ (اختیاری)", note: "نوٹ (اختیاری)", cancel: "منسوخ", save: "محفوظ کریں",
     badPass: "کوڈ یا پاس فریز غلط ہے۔", noData: "اس کوڈ کی فائل ابھی موجود نہیں۔", allTags: "تمام ٹیگ",
     allEnus: "تمام انیومریٹرز", shown: "دکھائے گئے", call: "کال", wa: "واٹس ایپ", log: "کال درج کریں",
@@ -97,7 +99,22 @@ const ACTION = {
         wait_fu: "فالو اپ آج شروع ہوا — انتظار کریں", wait_followup: "اگلے فالو اپ کا انتظار",
         all_done: "تمام سروے مکمل", do_not_contact: "رابطہ نہ کریں" },
 };
-const OUTCOMES = [
+/* a contact entry can record a WhatsApp message AND a phone call together (one of each at most) */
+const WA_OPTS = [
+  ["whatsapp_sent", "Message sent", "پیغام بھیجا"],
+  ["whatsapp_reply", "They replied", "انہوں نے جواب دیا"],
+];
+const CALL_OPTS = [
+  ["reached", "Reached — will fill it", "بات ہوئی — سروے کریں گے"],
+  ["reached_done", "Says already done", "کہتے ہیں مکمل کر لیا"],
+  ["no_answer", "No answer", "جواب نہیں دیا"],
+  ["busy", "Busy", "مصروف"],
+  ["switched_off", "Phone switched off", "فون بند"],
+  ["call_back", "Call back later", "بعد میں کال کریں"],
+  ["wrong_number", "Wrong number", "غلط نمبر"],
+  ["refused", "Not interested — do not contact", "دلچسپی نہیں — رابطہ نہ کریں"],
+];
+const OUTCOMES = [         /* labels for the history (older entries used single outcomes) */
   ["whatsapp_sent", "WhatsApp message sent", "واٹس ایپ پیغام بھیجا"],
   ["whatsapp_reply", "Replied on WhatsApp", "واٹس ایپ پر جواب آیا"],
   ["reached", "Reached — will fill it", "بات ہوئی — سروے کریں گے"],
@@ -109,6 +126,7 @@ const OUTCOMES = [
   ["wrong_number", "Wrong number", "غلط نمبر"],
   ["refused", "Not interested — do not contact again", "دلچسپی نہیں — دوبارہ رابطہ نہ کریں"],
 ];
+const parts = (o) => String(o || "").split("+").filter(Boolean);       // "whatsapp_sent+no_answer"
 const PAY_OUTCOMES = [["paid_fu2", "Paid — 2-week (PKR 200)", "ادائیگی — 2 ہفتے (200 روپے)"],
                       ["paid_fu4", "Paid — 4-week (PKR 150)", "ادائیگی — 4 ہفتے (150 روپے)"]];
 const TAGS = [
@@ -269,8 +287,8 @@ function applyOne(p, r) {    // what a new call / payment record changes on the 
   if (nc) { p.next_call = nc; if (nc > today()) p.call_today = false; }
   const tg = String(r.tags || "").split(",").filter(Boolean);
   p.tags = [...new Set([...(p.tags || []), ...tg])];
-  if (r.outcome === "refused") { p.action = "do_not_contact"; p.call_today = false; }
-  if (r.outcome === "wrong_number" || tg.includes("wrong_number")) p.call_today = false;
+  if (parts(r.outcome).includes("refused")) { p.action = "do_not_contact"; p.call_today = false; }
+  if (parts(r.outcome).includes("wrong_number") || tg.includes("wrong_number")) p.call_today = false;
 }
 
 /* ---------------------------------------------------------------- pending records (offline-safe) */
@@ -519,8 +537,9 @@ function renderList() {
   $("#list").querySelectorAll("[data-pay]").forEach((b) => b.onclick = () => openPay(...b.dataset.pay.split("|")));
 }
 function histList(logs) {
-  return logs.length ? `<ul>${logs.slice().reverse().map((l) => `<li>${esc(String(l.time).slice(0, 16).replace("T", " "))} · ${esc(l.enumerator)} ·
-    ${esc(lbl([...OUTCOMES, ...PAY_OUTCOMES].find((o) => o[0] === l.outcome) || [l.outcome, l.outcome, l.outcome]))}
+  const when = (s) => { const d = new Date(s); return isNaN(d) ? String(s).slice(0, 16) : `${localDay(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+  return logs.length ? `<ul>${logs.slice().reverse().map((l) => `<li>${esc(when(l.time))} · ${esc(l.enumerator)} ·
+    ${esc(parts(l.outcome).map((o) => lbl([...OUTCOMES, ...PAY_OUTCOMES].find((x) => x[0] === o) || [o, o, o])).join(" + "))}
     ${l.reference ? "· " + esc(l.reference) : ""}${l.note ? " · " + esc(l.note) : ""}${l._pending ? ` <i>(${t("pending")})</i>` : ""}</li>`).join("")}</ul>`
     : `<p>${t("noCalls")}</p>`;
 }
@@ -576,8 +595,16 @@ function openLog(pid) {
   current = D.people.find((p) => p.pid === pid);
   $("#logTitle").textContent = `${current.name || "—"} · ${current.pid}`;
   $("#logSub").textContent = ACTION[lang][current.action] || "";
-  const sel = $("#outcome"); sel.innerHTML = "";
-  OUTCOMES.forEach((o) => sel.add(new Option(lbl(o), o[0])));
+  const group = (el, opts) => {
+    el.innerHTML = opts.map((o) => `<button type="button" class="chip" data-v="${o[0]}">${lbl(o)}</button>`).join("");
+    el.querySelectorAll(".chip").forEach((c) => c.onclick = () => {      // one per group, tap again to clear
+      const on = c.classList.contains("on");
+      el.querySelectorAll(".chip").forEach((x) => x.classList.remove("on"));
+      if (!on) c.classList.add("on");
+    });
+  };
+  group($("#waPick"), WA_OPTS);
+  group($("#callPick"), CALL_OPTS);
   $("#tagPick").innerHTML = TAGS.map((r) => `<button type="button" class="chip" data-tag="${r[0]}">${lbl(r)}</button>`).join("");
   $("#tagPick").querySelectorAll(".chip").forEach((c) => c.onclick = () => c.classList.toggle("on"));
   $("#nextCall").value = ""; $("#note").value = "";
@@ -585,8 +612,10 @@ function openLog(pid) {
 }
 $("#logForm").addEventListener("submit", async (e) => {
   if (e.submitter && e.submitter.value !== "save") return;
+  const picked = [...document.querySelectorAll("#waPick .chip.on, #callPick .chip.on")].map((c) => c.dataset.v);
+  if (!picked.length) { e.preventDefault(); toast(t("pickOne")); return; }
   await record(current, {
-    action: current.action, outcome: $("#outcome").value,
+    action: current.action, outcome: picked.join("+"),
     tags: [...$("#tagPick").querySelectorAll(".chip.on")].map((c) => c.dataset.tag).join(","),
     note: $("#note").value.trim().slice(0, 300), next_call: $("#nextCall").value,
   }, t("savedOnline"));
