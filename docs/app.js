@@ -37,7 +37,8 @@ const T = {
     "Saved on this phone. It will be sent when you are online.", pending: "not yet synced",
     main: "Main", w2: "2-week", w4: "4-week", refresh: "Refresh", nextCallShort: "Next call",
     synced: "Live updates loaded", syncFail: "Could not load live updates (offline?)",
-    progress: "Progress to target", perRound: "per round, same people", plusPartial: "+ {n} partial",
+    progress: "Progress to target", payments: "Payments to my participants", payAll: "Payments",
+    paidN: "Paid", dueN: "Waiting for payment", live: "Live", tapToSee: "tap to see", perRound: "per round, same people", plusPartial: "+ {n} partial",
     roundMain: "Main survey", round2: "2-week follow-up", round4: "4-week follow-up",
     of: "of", moreFilters: "More…",
     full: "Full compliance", partial: "Partial compliance",
@@ -62,7 +63,8 @@ const T = {
     "اس فون پر محفوظ ہے، انٹرنیٹ ملنے پر بھیج دیا جائے گا۔", pending: "ابھی سنک نہیں ہوا",
     main: "مرکزی سروے", w2: "2 ہفتے", w4: "4 ہفتے", refresh: "تازہ کریں", nextCallShort: "اگلی کال",
     synced: "تازہ معلومات آ گئیں", syncFail: "تازہ معلومات نہیں آ سکیں (انٹرنیٹ؟)",
-    progress: "ہدف کی طرف پیش رفت", perRound: "ہر مرحلہ، وہی لوگ", plusPartial: "+ {n} جزوی",
+    progress: "ہدف کی طرف پیش رفت", payments: "میرے شرکاء کی ادائیگیاں", payAll: "ادائیگیاں",
+    paidN: "ادا ہو گئی", dueN: "ادائیگی کا انتظار", live: "لائیو", tapToSee: "دیکھنے کے لیے دبائیں", perRound: "ہر مرحلہ، وہی لوگ", plusPartial: "+ {n} جزوی",
     roundMain: "مرکزی سروے", round2: "2 ہفتے کا فالو اپ", round4: "4 ہفتے کا فالو اپ",
     of: "میں سے", moreFilters: "مزید…",
     full: "مکمل شرکت", partial: "جزوی شرکت",
@@ -244,6 +246,20 @@ $("#refreshBtn").addEventListener("click", async () => {
 });
 
 /* ---------------------------------------------------------------- live sync with the Google Sheet */
+let lastSync = 0, syncing = false;
+async function autoSync() {
+  if (!D || !AUTH || document.hidden || syncing) return;
+  syncing = true;
+  try {
+    try {      // a new push (new survey statuses) is picked up without reloading the page
+      const v = await (await fetch(`data/version.json?v=${Date.now()}`, { cache: "no-store" })).json();
+      if (v.generated && v.generated !== D.generated) { D = await loadData(AUTH.code, AUTH.pass); $("#genTime").textContent = D.generated; }
+    } catch (e) {}
+    await flushPending(); await syncLive(false);
+  } finally { syncing = false; }
+}
+setInterval(autoSync, 120000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden && Date.now() - lastSync > 60000) autoSync(); });
 async function syncLive(announce) {
   const inData = new Set(D.people.flatMap((p) => (p.calls || []).map((c) => c.log_id)));
   setPending(pending().filter((l) => !inData.has(l.log_id)));     // already in the published data
@@ -252,7 +268,11 @@ async function syncLive(announce) {
     const u = `${D.apps_script_url}?action=mine&code=${encodeURIComponent(D.code)}&token=${encodeURIComponent(D.log_token)}`;
     const r = await fetch(u, { cache: "no-store" });
     const j = await r.json();
-    if (j.ok) applyLive(j.rows || []);
+    if (j.ok) {
+      applyLive(j.rows || []);
+      lastSync = Date.now();
+      const n = new Date(); $("#liveTime").textContent = `· ${t("live")} ${pad(n.getHours())}:${pad(n.getMinutes())}`;
+    }
     if (announce) toast(t("synced"));
   } catch (e) { if (announce) toast(t("syncFail")); }
   render();
@@ -381,7 +401,20 @@ function renderProgress() {
         <span class="val">${r.n.toLocaleString()} <small>/ ${target.toLocaleString()} · ${pct.toFixed(0)}%</small></span></div>
         <div class="meter" role="img" aria-label="${r.label}: ${r.n} ${t("of")} ${target}"><span style="width:${pct.toFixed(1)}%;background:${r.color}"></span></div>
         ${r.extra ? `<div class="sub">${t("plusPartial").replace("{n}", r.extra)}</div>` : ""}</div>`;
-    }).join("")}</div>`;
+    }).join("")}</div>${paySummary(ps)}`;
+  box.querySelectorAll("[data-pf]").forEach((b) => b.onclick = () => { filter = b.dataset.pf; shown = PAGE; render();
+    $("#chips").scrollIntoView({ behavior: "smooth", block: "start" }); });
+}
+function paySummary(ps) {
+  let paidN = 0, paidSum = 0, dueN = 0, dueSum = 0;
+  for (const p of ps) for (const k of ["pay2", "pay4"]) {
+    const x = p[k]; if (!x) continue;
+    if (x.status === "paid") { paidN++; paidSum += Number(x.amount || 0); }
+    if (x.status === "due") { dueN++; dueSum += Number(x.amount || 0); }
+  }
+  return `<div class="paysum"><div class="paysum-title">${isAdmin() ? t("payAll") : t("payments")}</div>
+    <button class="paychip ok" data-pf="paid">✓ ${t("paidN")}: <b>${paidN}</b> · ${t("pkr")} ${paidSum.toLocaleString()}</button>
+    <button class="paychip warn" data-pf="paydue">⏳ ${t("dueN")}: <b>${dueN}</b> · ${t("pkr")} ${dueSum.toLocaleString()}</button></div>`;
 }
 
 /* ---- PAY tiles ---- */

@@ -25,9 +25,13 @@ A phone-friendly web page with three kinds of login:
 * **Survey status** (registered, started, completed, 2-week / 4-week done, payment
   due) comes from the Qualtrics exports. It changes on the website only after you run
   `update.py` and push.
-* **Calls and payments** are rows in the Google Sheet. Every login reads them live, so a
-  call logged by ENU03 or a payment marked by PAY shows for ENU03, PAY and ADMIN as soon
-  as they reload or press **Refresh**. `update.py` also reads the whole Sheet, so they are
+* **Calls and payments** are rows in the Google Sheet. Every open page reads them
+  automatically every 2 minutes and whenever it is reopened (the header shows "Live hh:mm"),
+  so a call logged by ENU03 or a payment marked by PAY shows for ENU03, PAY and ADMIN within
+  about 2 minutes; **Refresh** does it at once. Each enumerator sees the payments of their
+  own participants in the progress panel ("Paid / Waiting for payment").
+* After you push, open pages pick up the new survey statuses by themselves at the next
+  automatic refresh. `update.py` also reads the whole Sheet, so they are
   built into the next push as well.
 * **Nothing overlaps or is lost.** Qualtrics data and the Sheet are separate sources,
   merged by participant ID; every call / payment row has its own ID, so re-reading it
