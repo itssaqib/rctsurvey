@@ -30,6 +30,8 @@ ENUS = CFG["enumerators"]
 TODAY = date.today()
 P = lambda *a: os.path.join(HERE, *a)
 STATE = P("state", "people.csv")
+NUMBERS = P("state", "number_changes.csv")
+REOPEN = P("state", "contact_again.csv")
 STATE_COLS = ["phone", "participant_id", "enumerator", "first_seen", "source",
               "name", "gender", "age", "province", "district", "city"]
 PBKDF2_ITER = 200_000
@@ -205,11 +207,52 @@ def load_state():
     return s[STATE_COLS]
 
 
+def apply_number_changes(state, known):
+    """state/number_changes.csv (participant_id,new_phone,date,note): a participant's new contact number.
+    The ID and the enumerator stay; the old number keeps matching survey answers. If the new number is
+    already a second registration of the same person, that ID is folded into this one (it stays in
+    people.csv, so deleting the line undoes it)."""
+    cols = ["participant_id", "new_phone", "date", "note"]
+    if not os.path.exists(NUMBERS):
+        pd.DataFrame(columns=cols).to_csv(NUMBERS, index=False, encoding="utf-8-sig")
+    ch = pd.read_csv(NUMBERS, dtype=str, keep_default_na=False)
+    if (ch.date == "").any():                     # the change date is fixed the first time it is seen
+        ch.loc[ch.date == "", "date"] = TODAY.isoformat()
+        ch.to_csv(NUMBERS, index=False, encoding="utf-8-sig")
+    at = dict(zip(state.participant_id, state.index))
+    new_number, merged = {}, {}
+    for _, r in ch.iterrows():
+        i, ph = at.get(r.participant_id.strip()), clean_phone(r.new_phone)
+        if i is None or not ph:
+            print("  WARNING: number change skipped (unknown ID or number):", r.participant_id, r.new_phone)
+            continue
+        j = known.get(ph)
+        if j is not None and j != i:
+            merged[j] = i
+        known[ph] = i
+        new_number[i] = (ph, norm_day(r.date))
+    return new_number, merged
+
+
+def load_contact_again():
+    """state/contact_again.csv (participant_id,date,note): the team decided to contact someone again;
+    a refusal logged before that date no longer applies. Deleting the line undoes it."""
+    if not os.path.exists(REOPEN):
+        pd.DataFrame(columns=["participant_id", "date", "note"]).to_csv(REOPEN, index=False, encoding="utf-8-sig")
+    ch = pd.read_csv(REOPEN, dtype=str, keep_default_na=False)
+    if (ch.date == "").any():
+        ch.loc[ch.date == "", "date"] = TODAY.isoformat()
+        ch.to_csv(REOPEN, index=False, encoding="utf-8-sig")
+    return {r.participant_id.strip(): norm_day(r.date) for _, r in ch.iterrows()}
+
+
 # ============================================================ main
 def main():
     sec = make_secrets()
     state = load_state()
     known = dict(zip(state.phone, state.index))
+    new_number, merged = apply_number_changes(state, known)
+    reopen = load_contact_again()
 
     files = sorted(glob.glob(P("inputs", "*.xlsx")) + glob.glob(P("inputs", "*.csv")))
     data = {"reg": [], "main": [], "fu2": [], "fu4": []}
@@ -337,9 +380,14 @@ def main():
 
     # ---------------- statuses
     people = []
+    pid_of = state.participant_id.to_dict()
     for i, s in state.iterrows():
+        if i in merged:
+            continue          # second registration of someone's new number: shown under their first ID
+        mine = logs.get(s.participant_id, []) + [l for j, k in merged.items() if k == i for l in logs.get(pid_of[j], [])]
         people.append(build_person(i, s, main.get(i, []), fu["fu2"].get(i), fu["fu4"].get(i),
-                                   logs.get(s.participant_id, [])))
+                                   sorted(mine, key=lambda x: x["time"]), new_number.get(i),
+                                   reopen.get(s.participant_id, "")))
 
     # ---------------- save state (backup first)
     if os.path.exists(STATE):
@@ -350,7 +398,7 @@ def main():
     gen = datetime.now().strftime("%Y-%m-%d %H:%M")
     public = {"links": CFG["links"], "apps_script_url": CFG["apps_script_url"], "generated": gen,
               "target": CFG.get("target_per_enumerator", 300),
-              "fu2_day": CFG["fu2_day"], "fu4_day": CFG["fu4_day"],
+              "fu2_day": CFG["fu2_day"], "fu4_day": CFG["fu4_day"], "late_days": CFG.get("late_days", 3),
               "pay_fu2": CFG.get("pay_fu2", 200), "pay_fu4": CFG.get("pay_fu4", 150)}
     hidden_admin = ("age", "under_18", "gender", "video_seen", "n_video_attempts")
     for e in ENUS:
@@ -358,13 +406,14 @@ def main():
         obj = dict(public, role="enumerator", code=e, log_token=sec[e]["log_token"], people=mine)
         json.dump(encrypt(obj, sec[e]["passphrase"]), open(P("docs", "data", f"{e}.json.enc"), "w"))
     adm = dict(public, role="admin", code="ADMIN", log_token=sec["ADMIN"]["log_token"], people=people,
-               enumerators=ENUS, unmatched=unmatched)
+               enumerators=ENUS, unmatched=unmatched,
+               merged=[{"pid": pid_of[j], "into": pid_of[i]} for j, i in merged.items()])
     # PAY login (payment firm): only people who completed a follow-up; payment details, no survey answers
     pay_keep = ("pid", "enumerator", "name", "phone", "district", "province", "compliance",
                 "fu2_status", "fu2_date", "fu4_status", "fu4_date", "pay2", "pay4")
     payers = [dict({k: p[k] for k in pay_keep},
                    calls=[c for c in p["calls"] if str(c.get("outcome", "")).startswith("paid")])
-              for p in people if p["pay2"]["status"] != "not_due" or p["pay4"]["status"] != "not_due"]
+              for p in people if p["pay2"]["status"] in ("due", "paid") or p["pay4"]["status"] in ("due", "paid")]
     payobj = dict(public, role="pay", code="PAY", log_token=sec["PAY"]["log_token"], people=payers, enumerators=ENUS)
     json.dump(encrypt(payobj, sec["PAY"]["passphrase"]), open(P("docs", "data", "PAY.json.enc"), "w"))
     json.dump(encrypt(adm, sec["ADMIN"]["passphrase"]), open(P("docs", "data", "ADMIN.json.enc"), "w"))
@@ -382,6 +431,10 @@ def main():
                  CFG.get("pay_fu2", 200), sum(p["pay2"]["status"] == "due" for p in people),
                  sum(p["pay2"]["status"] == "paid" for p in people), CFG.get("pay_fu4", 150),
                  sum(p["pay4"]["status"] == "due" for p in people), sum(p["pay4"]["status"] == "paid" for p in people)),
+             "Payments on hold (follow-up done, no main survey under this number): "
+             + (", ".join(p["pid"] for p in people if "hold" in (p["pay2"]["status"], p["pay4"]["status"])) or "none"),
+             f"Number changes: {len(new_number)}   duplicate registrations merged: "
+             + (", ".join(f"{pid_of[j]} -> {pid_of[i]}" for j, i in merged.items()) or "none"),
              f"Follow-ups from numbers not in the study (see ADMIN): {len(unmatched)}", "",
              f"Full compliance: {int((df.compliance == 'full').sum())}   Partial compliance (video, not finished): "
              f"{int((df.compliance == 'partial').sum())}", "",
@@ -450,8 +503,9 @@ def load_call_log(sec):
     return out
 
 
-def build_person(i, s, mains, fu2, fu4, logs):
+def build_person(i, s, mains, fu2, fu4, logs, number=None, reopen=""):
     fmt = lambda t: "" if t is None or pd.isna(t) else pd.Timestamp(t).strftime("%Y-%m-%d")
+    phone, since = number or (s.phone, "")         # contact number (after a number change) and since when
     # ---- main survey: best attempt
     rank = {"completed": 4, "in_progress": 3, "stopped": 2, "declined": 1}
     if mains:
@@ -518,11 +572,16 @@ def build_person(i, s, mains, fu2, fu4, logs):
     # ---- calls and payments (payments are logged by the PAY login: outcome paid_fu2 / paid_fu4)
     last_call = [l for l in logs if not str(l.get("outcome", "")).startswith("paid")]
     last = last_call[-1] if last_call else None
-    tags = sorted({t.strip() for l in last_call for t in str(l.get("tags", "")).split(",") if t.strip()})
+    tag_set = lambda ls: {t.strip() for l in ls for t in str(l.get("tags", "")).split(",") if t.strip()}
+    # after a number change, tags and "wrong number" about the old number no longer apply (refusals still do)
+    now_calls = [l for l in last_call if l.get("day", "") >= since]
+    tags = sorted(tag_set(now_calls))
     # one entry can combine a WhatsApp result and a call result: "whatsapp_sent+no_answer"
     parts = lambda l: str(l.get("outcome", "")).split("+")
-    refused = bool(last and "refused" in parts(last)) or "refused" in tags
-    wrong = "wrong_number" in tags or bool(last and "wrong_number" in parts(last))
+    # a refusal logged before the team's "contact again" date (state/contact_again.csv) no longer applies
+    valid = [l for l in last_call if l.get("day", "") >= reopen]
+    refused = bool(valid and "refused" in parts(valid[-1])) or "refused" in tag_set(valid)
+    wrong = "wrong_number" in tags or bool(last and last in now_calls and "wrong_number" in parts(last))
 
     def pay(w, amount):
         rec = fu_rec[w]
@@ -532,17 +591,22 @@ def build_person(i, s, mains, fu2, fu4, logs):
             return dict(status="paid", amount=p.get("amount") or amount, date=str(p.get("time", ""))[:10],
                         ref=p.get("reference", ""), method=p.get("method", ""), number=p.get("pay_number", ""))
         if rec and rec["done"]:
-            return dict(status="due", amount=amount, date=fmt(rec["date"]), ref="",
-                        method=rec["pay_method"], number=rec["pay_number"] or s.phone)
+            # follow-up done but no main survey / video under this number: not treated, so the payment
+            # waits until the enumerator finds out which number they used (team decision, 1 Nov)
+            return dict(status="due" if compliance else "hold", amount=amount, date=fmt(rec["date"]), ref="",
+                        method=rec["pay_method"], number=rec["pay_number"] or phone)
         return dict(status="not_due", amount=amount, date="", ref="", method="", number="")
 
     pay2, pay4 = pay("fu2", CFG.get("pay_fu2", 200)), pay("fu4", CFG.get("pay_fu4", 150))
+    hold = "hold" in (pay2["status"], pay4["status"])
     # ---- next action
     stall = last_start is not None and (TODAY - pd.Timestamp(last_start).date()).days >= CFG["stall_days"]
     if main_status == "declined":
         action, link = "do_not_contact", ""
     elif refused:
         action, link = "do_not_contact", ""
+    elif hold:
+        action, link = "check_number", ""          # ask which number they used for the main survey
     elif main_status == "not_started":
         action, link = "main_invite", "main"
     # started, no video yet: in progress -> reopen on the same phone; stopped (closed) -> start again.
@@ -568,13 +632,15 @@ def build_person(i, s, mains, fu2, fu4, logs):
     else:
         action, link = "wait_followup", ""
     next_call = (last or {}).get("next_call", "") or ""
-    actionable = action in ("main_invite", "main_remind", "main_restart", "fu2", "fu4")
+    actionable = action in ("main_invite", "main_remind", "main_restart", "fu2", "fu4", "check_number")
     called_today = bool(last and last.get("day", str(last.get("time", ""))[:10]) == TODAY.isoformat())
-    call_today = (actionable and not wrong and not called_today and (not next_call or next_call <= TODAY.isoformat()))
+    # (on hold: the follow-up was answered from this number, so an earlier "wrong number" does not apply)
+    call_today = (actionable and (not wrong or hold) and not called_today and (not next_call or next_call <= TODAY.isoformat()))
     # age is not used: under-18 participants are treated like everyone else (team decision, 27 Oct)
     return {
         "pid": s.participant_id, "enumerator": s.enumerator, "name": s["name"] or "",
-        "phone": s.phone, "district": s.district or "", "province": s.province or "", "city": s.city or "",
+        "phone": phone, "old_phone": s.phone if number else "", "number_changed": since,
+        "district": s.district or "", "province": s.province or "", "city": s.city or "",
         "source": s.source, "first_seen": str(s.first_seen)[:10],
         "main_status": main_status, "main_progress": progress, "main_done": fmt(main_done),
         "main_last_start": fmt(last_start), "video_seen": bool(video_seen), "n_video_attempts": n_video, "n_completed": n_completed,

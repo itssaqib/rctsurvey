@@ -25,5 +25,6 @@
   "stall_days": 2,
   "target_per_enumerator": 320,
   "pay_fu2": 200,
-  "pay_fu4": 150
+  "pay_fu4": 150,
+  "late_days": 3
 }

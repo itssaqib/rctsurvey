@@ -89,12 +89,30 @@ completion, or from the day the video was watched for partial compliance):
 | Done | completed | — (payment becomes due) |
 | Missed | 2-week never done and the 4-week window has opened | 4-week survey takes over |
 
+**Late (red tag).** A follow-up that is still open more than `late_days` (3) days after its due
+date gets a red "N days late" tag, a red border and its due date in bold red; the Follow-ups tab
+shows the number in red, and *More… → Follow-up late* lists them.
+
+**New phone number.** Add a line to `state/number_changes.csv` (`participant_id,new_phone,date,note`;
+the date is filled in if left empty) and run `update.py`. ID and enumerator stay the same; calls,
+WhatsApp and the payment fallback use the new number; survey answers with either number still
+match; "wrong number" and other tags logged before the change are dropped. If the new number was
+already registered as a second ID, that ID is folded into the first one (listed under ADMIN →
+Checks). Deleting the line undoes it.
+
+**Contact again after a refusal.** Add a line to `state/contact_again.csv`
+(`participant_id,date,note`) and run `update.py`: refusals logged before that date no longer
+count, so the person comes back on the enumerator's list. A new refusal after it counts again.
+
 **Payments** (order form with CANE Technologies): **PKR 200** after the 2-week
 follow-up, **PKR 150** after the 4-week follow-up. A payment becomes *Due* when the
 follow-up is completed; method and account number come from the participant's answers
 in that follow-up (fallback: their phone number). PAY sends the money, presses **Mark as
 paid** and enters the transaction ID → the payment shows as *Paid* for the enumerator
 and ADMIN straight away. PAY can also download the due list as CSV.
+A follow-up completed by someone with no main survey (or no video) under that number is
+**on hold**: PAY does not see it, and the enumerator is asked to find out which number they used
+for the main survey (then add it as a number change, or tell the team).
 
 **Analysis note (pre-analysis plan):** treated = reached the video page; follow-up
 outcomes are analysed for full + partial compliance; missing post-video items of

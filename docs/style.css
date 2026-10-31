@@ -117,6 +117,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); out
 .card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px;
   box-shadow: var(--shadow); }
 .card.today { border-inline-start: 4px solid var(--brand); }
+.card.late { border-inline-start: 4px solid var(--bad); }       /* follow-up due more than 3 days ago */
 .row1 { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .nm { font-weight: 700; font-size: 16px; }
 .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -125,6 +126,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); out
 .b.ok { background: var(--ok-soft); color: var(--ok); } .b.warn { background: var(--warn-soft); color: var(--warn); }
 .b.bad { background: var(--bad-soft); color: var(--bad); } .b.info { background: var(--info-soft); color: var(--info); }
 .b.strong { font-weight: 700; }
+.b.late { background: var(--bad); color: var(--card); font-weight: 700; }
+.late-date { color: var(--bad); font-weight: 800; }
+.b.bad .late-date { color: inherit; }
+.late-txt { color: var(--bad); font-weight: 700; }
+.tab .k.late { background: var(--bad); color: var(--card); opacity: 1; font-weight: 700; border-radius: 99px; padding: 1px 7px; }
 .act { font-size: 14px; margin: 2px 0 10px; color: var(--ink-2); }
 .act b { color: var(--ink); }
 .btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
