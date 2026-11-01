@@ -592,7 +592,7 @@ function renderList() {
 }
 function histList(logs) {
   const when = (s) => { const d = new Date(s); return isNaN(d) ? String(s).slice(0, 16) : `${localDay(d)} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
-  return logs.length ? `<ul>${logs.slice().reverse().map((l) => `<li>${esc(when(l.time))} · ${esc(l.enumerator)} ·
+  return logs.length ? `<ul>${logs.slice().reverse().map((l) => `<li>${esc(when(l.time))} · ${esc(l.enumerator)}${l.other_id ? ` (${esc(l.other_id)})` : ""} ·
     ${esc(parts(l.outcome).map((o) => lbl([...OUTCOMES, ...PAY_OUTCOMES].find((x) => x[0] === o) || [o, o, o])).join(" + "))}
     ${l.reference ? "· " + esc(l.reference) : ""}${l.note ? " · " + esc(l.note) : ""}${l._pending ? ` <i>(${t("pending")})</i>` : ""}</li>`).join("")}</ul>`
     : `<p>${t("noCalls")}</p>`;

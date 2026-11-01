@@ -32,6 +32,8 @@ P = lambda *a: os.path.join(HERE, *a)
 STATE = P("state", "people.csv")
 NUMBERS = P("state", "number_changes.csv")
 REOPEN = P("state", "contact_again.csv")
+SAME = P("state", "same_person.csv")
+LINKS = P("state", "response_links.csv")
 STATE_COLS = ["phone", "participant_id", "enumerator", "first_seen", "source",
               "name", "gender", "age", "province", "district", "city"]
 PBKDF2_ITER = 200_000
@@ -207,18 +209,24 @@ def load_state():
     return s[STATE_COLS]
 
 
+def read_team_list(path, cols):
+    """A small list the team keeps in state/ (created if missing). An empty date becomes today and is
+    fixed the first time it is seen."""
+    if not os.path.exists(path):
+        pd.DataFrame(columns=cols).to_csv(path, index=False, encoding="utf-8-sig")
+    ch = pd.read_csv(path, dtype=str, keep_default_na=False)
+    if (ch.date == "").any():
+        ch.loc[ch.date == "", "date"] = TODAY.isoformat()
+        ch.to_csv(path, index=False, encoding="utf-8-sig")
+    return ch
+
+
 def apply_number_changes(state, known):
     """state/number_changes.csv (participant_id,new_phone,date,note): a participant's new contact number.
     The ID and the enumerator stay; the old number keeps matching survey answers. If the new number is
     already a second registration of the same person, that ID is folded into this one (it stays in
     people.csv, so deleting the line undoes it)."""
-    cols = ["participant_id", "new_phone", "date", "note"]
-    if not os.path.exists(NUMBERS):
-        pd.DataFrame(columns=cols).to_csv(NUMBERS, index=False, encoding="utf-8-sig")
-    ch = pd.read_csv(NUMBERS, dtype=str, keep_default_na=False)
-    if (ch.date == "").any():                     # the change date is fixed the first time it is seen
-        ch.loc[ch.date == "", "date"] = TODAY.isoformat()
-        ch.to_csv(NUMBERS, index=False, encoding="utf-8-sig")
+    ch = read_team_list(NUMBERS, ["participant_id", "new_phone", "date", "note"])
     at = dict(zip(state.participant_id, state.index))
     new_number, merged = {}, {}
     for _, r in ch.iterrows():
@@ -237,13 +245,36 @@ def apply_number_changes(state, known):
 def load_contact_again():
     """state/contact_again.csv (participant_id,date,note): the team decided to contact someone again;
     a refusal logged before that date no longer applies. Deleting the line undoes it."""
-    if not os.path.exists(REOPEN):
-        pd.DataFrame(columns=["participant_id", "date", "note"]).to_csv(REOPEN, index=False, encoding="utf-8-sig")
-    ch = pd.read_csv(REOPEN, dtype=str, keep_default_na=False)
-    if (ch.date == "").any():
-        ch.loc[ch.date == "", "date"] = TODAY.isoformat()
-        ch.to_csv(REOPEN, index=False, encoding="utf-8-sig")
+    ch = read_team_list(REOPEN, ["participant_id", "date", "note"])
     return {r.participant_id.strip(): norm_day(r.date) for _, r in ch.iterrows()}
+
+
+def apply_same_person(state, known):
+    """state/same_person.csv (keep_id,other_id,date,note): two IDs are one person, e.g. the main survey
+    from one number and a follow-up from another. other_id is folded into keep_id: survey answers from
+    either number count for keep_id (now and in later waves) and its call history is shown there; the
+    contact number and the enumerator stay those of keep_id. Both stay in people.csv, so deleting the
+    line undoes it. other_id can also be a phone number that is not in the study (e.g. a follow-up
+    typed with a wrong number): answers typed with it then count for keep_id."""
+    ch = read_team_list(SAME, ["keep_id", "other_id", "date", "note"])
+    at = dict(zip(state.participant_id, state.index))
+    folded, extra = {}, []
+    for _, r in ch.iterrows():
+        i, j, ph = at.get(r.keep_id.strip()), at.get(r.other_id.strip()), clean_phone(r.other_id)
+        if j is None and ph:
+            j = known.get(ph)
+            if j is None and i is not None:
+                known[ph] = i
+                extra.append(f"{ph} -> {r.keep_id.strip()}")
+                continue
+        if i is None or j is None or i == j:
+            print("  WARNING: same-person line skipped (unknown ID or number):", r.keep_id, r.other_id)
+            continue
+        for ph, k in list(known.items()):
+            if k == j:
+                known[ph] = i
+        folded[j] = i
+    return folded, extra
 
 
 # ============================================================ main
@@ -252,6 +283,7 @@ def main():
     state = load_state()
     known = dict(zip(state.phone, state.index))
     new_number, merged = apply_number_changes(state, known)
+    same, extra_numbers = apply_same_person(state, known)
     reopen = load_contact_again()
 
     files = sorted(glob.glob(P("inputs", "*.xlsx")) + glob.glob(P("inputs", "*.csv")))
@@ -270,6 +302,7 @@ def main():
         sys.exit("No Qualtrics exports found in inputs/.")
 
     new_people = []
+    links = []                # every survey response -> participant (state/response_links.csv, for the analysis)
 
     def person_for(phones, first_seen, profile, source):
         """Return the state index for the first known phone; otherwise queue a new person."""
@@ -309,6 +342,7 @@ def main():
             continue
         finished = str(val(r, "Finished")).lower() in ("true", "1")
         rid = val(r, "ResponseId") or ""
+        links.append(("main", rid, i, next(p for p in phones if p), finished, val(r, "EndDate" if finished else "StartDate")))
         consent = val(r, "consent")
         st = ("completed" if finished and consent != "No" else "declined" if consent == "No"
               else "in_progress" if rid.startswith("FS_") else "stopped")
@@ -334,6 +368,7 @@ def main():
                     unmatched.append({"wave": w, "phone_typed": val(r, "fu_mobile") or "", "name": tidy(val(r, "fu_name")),
                                       "date": str(val(r, "StartDate"))[:16], "finished": finished, "response_id": rid})
                 continue
+            links.append((w, rid, i, ph, finished, val(r, "EndDate" if finished else "StartDate")))
             done = finished and val(r, "fu_consent") != "No"
             recs.setdefault(i, []).append(dict(
                 done=done, open=rid.startswith("FS_"), start=to_dt(val(r, "StartDate")),
@@ -368,6 +403,7 @@ def main():
             for old, new in list(remap.items()):
                 if old in d:
                     d[new] = d.pop(old)
+        links = [(w, rid, remap.get(i, i), *rest) for w, rid, i, *rest in links]
     assert state.phone.is_unique and state.participant_id.is_unique
     # profile refresh from the latest registration / survey answers (never touches ID or enumerator)
     for i, prof in reg_profile.items():
@@ -382,9 +418,10 @@ def main():
     people = []
     pid_of = state.participant_id.to_dict()
     for i, s in state.iterrows():
-        if i in merged:
-            continue          # second registration of someone's new number: shown under their first ID
+        if i in merged or i in same:
+            continue          # second registration of the same person: shown under their first ID
         mine = logs.get(s.participant_id, []) + [l for j, k in merged.items() if k == i for l in logs.get(pid_of[j], [])]
+        mine += [dict(l, other_id=pid_of[j]) for j, k in same.items() if k == i for l in logs.get(pid_of[j], [])]
         people.append(build_person(i, s, main.get(i, []), fu["fu2"].get(i), fu["fu4"].get(i),
                                    sorted(mine, key=lambda x: x["time"]), new_number.get(i),
                                    reopen.get(s.participant_id, "")))
@@ -393,6 +430,12 @@ def main():
     if os.path.exists(STATE):
         shutil.copy(STATE, STATE.replace(".csv", f"_backup_{datetime.now():%Y%m%d_%H%M%S}.csv"))
     state[STATE_COLS].to_csv(STATE, index=False, encoding="utf-8-sig")
+    # finished_order 1 = the person's first finished response to that survey (2, 3 = repeats)
+    lk = pd.DataFrame([{"survey": w, "response_id": rid, "participant_id": pid_of[i], "phone_in_survey": ph,
+                        "finished": f, "date": str(d or "")[:19]} for w, rid, i, ph, f, d in links])
+    fin, when = lk.finished, pd.to_datetime(lk.date, format="mixed", errors="coerce")
+    lk["finished_order"] = when[fin].groupby([lk.survey[fin], lk.participant_id[fin]]).rank(method="first").astype("Int64")
+    lk.sort_values(["participant_id", "survey", "date"]).to_csv(LINKS, index=False, encoding="utf-8-sig")
 
     # ---------------- publish encrypted files
     gen = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -407,7 +450,7 @@ def main():
         json.dump(encrypt(obj, sec[e]["passphrase"]), open(P("docs", "data", f"{e}.json.enc"), "w"))
     adm = dict(public, role="admin", code="ADMIN", log_token=sec["ADMIN"]["log_token"], people=people,
                enumerators=ENUS, unmatched=unmatched,
-               merged=[{"pid": pid_of[j], "into": pid_of[i]} for j, i in merged.items()])
+               merged=[{"pid": pid_of[j], "into": pid_of[i]} for j, i in {**merged, **same}.items()])
     # PAY login (payment firm): only people who completed a follow-up; payment details, no survey answers
     pay_keep = ("pid", "enumerator", "name", "phone", "district", "province", "compliance",
                 "fu2_status", "fu2_date", "fu4_status", "fu4_date", "pay2", "pay4")
@@ -435,6 +478,8 @@ def main():
              + (", ".join(p["pid"] for p in people if "hold" in (p["pay2"]["status"], p["pay4"]["status"])) or "none"),
              f"Number changes: {len(new_number)}   duplicate registrations merged: "
              + (", ".join(f"{pid_of[j]} -> {pid_of[i]}" for j, i in merged.items()) or "none"),
+             "Same person (state/same_person.csv): IDs "
+             + (", ".join(f"{pid_of[j]} -> {pid_of[i]}" for j, i in same.items()) or "none") + "   numbers " + (", ".join(extra_numbers) or "none"),
              f"Follow-ups from numbers not in the study (see ADMIN): {len(unmatched)}", "",
              f"Full compliance: {int((df.compliance == 'full').sum())}   Partial compliance (video, not finished): "
              f"{int((df.compliance == 'partial').sum())}", "",
@@ -571,10 +616,13 @@ def build_person(i, s, mains, fu2, fu4, logs, number=None, reopen=""):
                                    (TODAY - pd.Timestamp(fu_rec[w]["start"]).date()).days >= 1)
     # ---- calls and payments (payments are logged by the PAY login: outcome paid_fu2 / paid_fu4)
     last_call = [l for l in logs if not str(l.get("outcome", "")).startswith("paid")]
-    last = last_call[-1] if last_call else None
+    # calls under a second ID of the same person (state/same_person.csv) stay in the history, but their
+    # tags, "wrong number" and next-call date were about that other number
+    own = [l for l in last_call if not l.get("other_id")]
+    last = own[-1] if own else None
     tag_set = lambda ls: {t.strip() for l in ls for t in str(l.get("tags", "")).split(",") if t.strip()}
     # after a number change, tags and "wrong number" about the old number no longer apply (refusals still do)
-    now_calls = [l for l in last_call if l.get("day", "") >= since]
+    now_calls = [l for l in own if l.get("day", "") >= since]
     tags = sorted(tag_set(now_calls))
     # one entry can combine a WhatsApp result and a call result: "whatsapp_sent+no_answer"
     parts = lambda l: str(l.get("outcome", "")).split("+")

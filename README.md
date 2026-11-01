@@ -100,6 +100,19 @@ match; "wrong number" and other tags logged before the change are dropped. If th
 already registered as a second ID, that ID is folded into the first one (listed under ADMIN →
 Checks). Deleting the line undoes it.
 
+**Same person under two IDs** (e.g. main survey from one number, follow-up from another). Add a line
+to `state/same_person.csv` (`keep_id,other_id,date,note`) and run `update.py`. `other_id` is folded
+into `keep_id`: survey answers from either number count for `keep_id`, now and in later waves; its
+call history is shown there, marked with the other ID; the contact number and enumerator stay those of
+`keep_id`. `other_id` can also be a phone number that is not in the study (a follow-up typed with a
+wrong number): answers typed with it then count for `keep_id`. Deleting the line undoes it.
+
+**Response links (for the analysis).** Each run writes `state/response_links.csv`: every main and
+follow-up response (`response_id`) with the `participant_id` it belongs to, the number typed in the
+survey, `finished`, and `finished_order` (1 = the person's first finished response to that survey;
+2, 3 = repeats). Merge the Qualtrics data on `response_id` to get participant IDs that already include
+number changes and same-person links.
+
 **Contact again after a refusal.** Add a line to `state/contact_again.csv`
 (`participant_id,date,note`) and run `update.py`: refusals logged before that date no longer
 count, so the person comes back on the enumerator's list. A new refusal after it counts again.
