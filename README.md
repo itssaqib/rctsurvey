@@ -86,7 +86,7 @@ completion, or from the day the video was watched for partial compliance):
 | Due / Overdue | due date reached, not started (overdue after 7 days) | send the link |
 | Started (open) | opened the follow-up but did not finish; session still open | after 1 day: "open the link on the same phone to finish" |
 | Started, closed | unfinished response closed by Qualtrics (after 1 week) | send the link again: they fill it from the start (no randomisation, so this is safe) |
-| Done | completed | — (payment becomes due) |
+| Done | completed — or every question answered, payment details included (progress ≥ 97%), with Submit never pressed | — (payment becomes due) |
 | Missed | 2-week never done and the 4-week window has opened | 4-week survey takes over |
 
 **Late (red tag).** A follow-up that is still open more than `late_days` (3) days after its due

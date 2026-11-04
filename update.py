@@ -286,7 +286,8 @@ def main():
     same, extra_numbers = apply_same_person(state, known)
     reopen = load_contact_again()
 
-    files = sorted(glob.glob(P("inputs", "*.xlsx")) + glob.glob(P("inputs", "*.csv")))
+    files = sorted(f for f in glob.glob(P("inputs", "*.xlsx")) + glob.glob(P("inputs", "*.csv"))
+                   if not os.path.basename(f).startswith("~$"))      # Excel lock file of an open export
     data = {"reg": [], "main": [], "fu2": [], "fu4": []}
     for f in files:
         if os.path.basename(f).lower().startswith("call_log"):
@@ -362,17 +363,20 @@ def main():
             ph = clean_phone(val(r, "fu_mobile"))
             rid = val(r, "ResponseId") or ""
             finished = str(val(r, "Finished")).lower() in ("true", "1")
+            # every question answered (payment details are the last ones) but Submit never pressed: counts as done
+            finished = finished or (float(val(r, "Progress") or 0) >= 97 and bool(clean_phone(val(r, "fu_pay_number"))))
             i = known.get(ph) if ph else None
             if i is None:
                 if ph or finished:
                     unmatched.append({"wave": w, "phone_typed": val(r, "fu_mobile") or "", "name": tidy(val(r, "fu_name")),
                                       "date": str(val(r, "StartDate"))[:16], "finished": finished, "response_id": rid})
                 continue
-            links.append((w, rid, i, ph, finished, val(r, "EndDate" if finished else "StartDate")))
+            end = val(r, "EndDate") if finished else None
+            links.append((w, rid, i, ph, finished, end or val(r, "StartDate")))
             done = finished and val(r, "fu_consent") != "No"
             recs.setdefault(i, []).append(dict(
                 done=done, open=rid.startswith("FS_"), start=to_dt(val(r, "StartDate")),
-                date=to_dt(val(r, "EndDate") if done else val(r, "StartDate")),
+                date=to_dt(end or val(r, "StartDate")),
                 progress=int(float(val(r, "Progress") or 0)),
                 pay_method=eng(val(r, "fu_pay_method")), pay_number=clean_phone(val(r, "fu_pay_number")) or ""))
         for i, rs in recs.items():
