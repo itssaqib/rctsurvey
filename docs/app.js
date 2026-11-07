@@ -27,7 +27,8 @@ const T = {
   en: {
     title: "Fieldwork Tracker", subtitle: "Sunni–Shia study · participant follow-up", code: "Your code",
     passphrase: "Passphrase", remember: "Remember on this phone", open: "Open my list", updated: "Updated",
-    logout: "Log out", search: "Search name, ID or phone", export: "Download list (CSV)",
+    logout: "Log out", search: "Search name, ID or phone", searchAll: "searching everyone (all tabs)",
+    export: "Download list (CSV)",
     exportLogs: "Download my unsent logs", more: "Show more", outcome: "What happened?", tags: "Tags", waPart: "WhatsApp", callPart: "Phone call",
     pickOne: "Choose what happened (WhatsApp, call or both).",
     nextCall: "Next call date (optional)", note: "Note (optional)", cancel: "Cancel", save: "Save",
@@ -54,7 +55,8 @@ const T = {
   ur: {
     title: "فیلڈ ورک ٹریکر", subtitle: "سنی–شیعہ تحقیق · شرکاء سے رابطہ", code: "آپ کا کوڈ",
     passphrase: "پاس فریز", remember: "اس فون پر یاد رکھیں", open: "میری فہرست کھولیں", updated: "اپ ڈیٹ",
-    logout: "لاگ آؤٹ", search: "نام، آئی ڈی یا نمبر تلاش کریں", export: "فہرست ڈاؤن لوڈ کریں (CSV)",
+    logout: "لاگ آؤٹ", search: "نام، آئی ڈی یا نمبر تلاش کریں", searchAll: "سب میں تلاش (تمام ٹیب)",
+    export: "فہرست ڈاؤن لوڈ کریں (CSV)",
     exportLogs: "نہ بھیجی گئی کالز ڈاؤن لوڈ کریں", more: "مزید دکھائیں", outcome: "کیا ہوا؟", tags: "ٹیگ", waPart: "واٹس ایپ", callPart: "فون کال",
     pickOne: "بتائیں کیا ہوا (واٹس ایپ، کال یا دونوں)۔",
     nextCall: "اگلی کال کی تاریخ (اختیاری)", note: "نوٹ (اختیاری)", cancel: "منسوخ", save: "محفوظ کریں",
@@ -224,8 +226,17 @@ document.querySelectorAll("[data-lang-toggle]").forEach((el) =>
 
 /* ---------------------------------------------------------------- login / refresh */
 const codeSel = $("#codeSel");
-CODES.forEach((c) => codeSel.add(new Option(
-  c === "ADMIN" ? "ADMIN (research team)" : c === "PAY" ? "PAY (payments — CANE Technologies)" : c, c)));
+function fillCodes(list) {
+  const keep = codeSel.value;
+  codeSel.innerHTML = "";
+  list.forEach((c) => codeSel.add(new Option(
+    c === "ADMIN" ? "ADMIN (research team)" : c === "PAY" ? "PAY (payments — CANE Technologies)" : c, c)));
+  if (list.includes(keep)) codeSel.value = keep;
+}
+fillCodes(CODES);
+/* the published login list (data/version.json) wins: a split login such as ENU06B appears without a code change */
+fetch(`data/version.json?v=${Date.now()}`, { cache: "no-store" }).then((r) => r.json())
+  .then((v) => { if (Array.isArray(v.codes) && v.codes.length) fillCodes(v.codes); }).catch(() => {});
 async function loadData(code, pass) {
   const r = await fetch(`data/${code}.json.enc?v=${Date.now()}`, { cache: "no-store" });
   if (!r.ok) throw new Error("nodata");
@@ -378,7 +389,7 @@ function fillSelects() {
 function setupMain() {
   fillSelects();
   ["#search", "#tagSel", "#enuSel"].forEach((s) => $(s).addEventListener("input", () => { shown = PAGE; render(); }));
-  $("#moreSel").addEventListener("change", (e) => { if (e.target.value) { filter = e.target.value; shown = PAGE; render(); } });
+  $("#moreSel").addEventListener("change", (e) => { if (e.target.value) { pick(e.target.value); render(); } });
   $("#moreBtn").onclick = () => { shown += PAGE; renderList(); };
   $("#exportBtn").onclick = () => (isPay() ? exportPay() : exportCsv());
   $("#exportLogsBtn").onclick = exportLogs;
@@ -405,7 +416,10 @@ function renderProgress() {
   if (isPay()) { box.hidden = true; return; }
   box.hidden = false;
   const ps = base();
-  const target = (D.target || 320) * (isAdmin() && !$("#enuSel").value ? D.enumerators.length : 1);
+  // a login split in two (D.split, e.g. ENU06 + ENU06B) shares one enumerator's target
+  const sel = isAdmin() ? $("#enuSel").value : "";
+  const target = !isAdmin() ? (D.target || 320) : sel ? ((D.targets || {})[sel] || D.target || 320)
+    : (D.target || 320) * D.enumerators.filter((e) => !(D.split || {})[e]).length;
   box.innerHTML = `<h3>${t("progress")} <span class="muted">${target.toLocaleString()} ${t("perRound")}</span></h3>
     <div class="prog">${rounds(ps).map((r) => {
       const pct = Math.min(100, (100 * r.n) / target);
@@ -414,7 +428,7 @@ function renderProgress() {
         <div class="meter" role="img" aria-label="${r.label}: ${r.n} ${t("of")} ${target}"><span style="width:${pct.toFixed(1)}%;background:${r.color}"></span></div>
         ${r.extra ? `<div class="sub">${t("plusPartial").replace("{n}", r.extra)}</div>` : ""}</div>`;
     }).join("")}</div>${paySummary(ps)}`;
-  box.querySelectorAll("[data-pf]").forEach((b) => b.onclick = () => { filter = b.dataset.pf; shown = PAGE; render();
+  box.querySelectorAll("[data-pf]").forEach((b) => b.onclick = () => { pick(b.dataset.pf); render();
     $("#chips").scrollIntoView({ behavior: "smooth", block: "start" }); });
 }
 function paySummary(ps) {
@@ -447,7 +461,7 @@ function renderStats() {
     ["paid", t("stat_paidall"), `${ps.reduce((s, p) => s + ["pay2", "pay4"].filter((k) => p[k].status === "paid").length, 0)} · ${t("pkr")} ${(sum("pay2", "paid") + sum("pay4", "paid")).toLocaleString()}`],
   ];
   box.innerHTML = cards.map(statCard).join("");
-  box.querySelectorAll(".stat").forEach((b) => b.onclick = () => { filter = b.dataset.f; shown = PAGE; render(); });
+  box.querySelectorAll(".stat").forEach((b) => b.onclick = () => { pick(b.dataset.f); render(); });
 }
 
 /* ---- ADMIN: chart by enumerator + collapsible details ---- */
@@ -469,6 +483,8 @@ function adminChart() {
     const x0 = m.l + i * gw + (gw - (3 * bw + 4)) / 2;
     g += d.r.map((r, k) => bar(x0 + k * (bw + 2), r.n, r.color)).join("");
     g += `<text class="axis" x="${m.l + i * gw + gw / 2}" y="${H - 8}" text-anchor="middle">${d.e.replace("ENU", "")}</text>`;
+    const lt = (D.targets || {})[d.e];      // a split login's own share of the target
+    if (lt && lt !== tgt) g += `<line class="target" x1="${m.l + i * gw + 4}" x2="${m.l + (i + 1) * gw - 4}" y1="${y(lt)}" y2="${y(lt)}"/>`;
     g += `<rect class="hit" data-i="${i}" x="${m.l + i * gw}" y="${m.t}" width="${gw}" height="${ih}"/>`;
   });
   g += `<line class="target" x1="${m.l}" x2="${W - m.r}" y1="${y(tgt)}" y2="${y(tgt)}"/>
@@ -531,21 +547,41 @@ function renderTabs() {
   const nLate = isPay() ? 0 : ps.filter(lateWave).length;
   $("#chips").innerHTML = list.map(([k, f, en, ur]) =>
     `<button class="tab ${filter === k ? "on" : ""}" role="tab" data-k="${k}">${lang === "ur" ? ur : en}<span class="k">${ps.filter(f).length}</span>${k === "followup" && nLate ? `<span class="k late" title="${t("late")}">⚠ ${nLate}</span>` : ""}</button>`).join("");
-  $("#chips").querySelectorAll(".tab").forEach((b) => b.onclick = () => { filter = b.dataset.k; shown = PAGE; $("#moreSel").value = ""; render(); });
+  $("#chips").classList.toggle("searching", !!$("#search").value.trim());     // no tab looks picked while searching
+  $("#chips").querySelectorAll(".tab").forEach((b) => b.onclick = () => { pick(b.dataset.k); $("#moreSel").value = ""; render(); });
   const ms = $("#moreSel");
   ms.classList.toggle("on", MORE.some((m) => m[0] === filter));
   if (!isPay()) ms.value = MORE.some((m) => m[0] === filter) ? filter : "";
 }
+/* picking a tab, tile or filter shows that list, so it clears the search (a search looks through everyone) */
+function pick(k) { filter = k; shown = PAGE; $("#search").value = ""; }
+/* search: name, ID or any of the person's numbers, typed in any form (+92 345 2906335, 0345-2906335,
+   Urdu digits). It looks through everyone, whatever tab or tag is selected: someone whose follow-up is
+   done and who calls or messages again must still be found. */
+const asciiDigits = (s) => String(s ?? "").replace(/[\u0660-\u0669\u06F0-\u06F9]/g, (c) => String(c.charCodeAt(0) & 15));
+const digits = (s) => asciiDigits(s).replace(/\D/g, "");
+function phoneQuery(q) {
+  let d = digits(q);
+  if (d.startsWith("0092")) d = d.slice(2);
+  if (d.startsWith("92") && d.length >= 9) d = "0" + d.slice(2);
+  return d.length >= 7 ? d : "";      // shorter digit runs are IDs (6 digits) or too short for a number
+}
+const squash = (s) => asciiDigits(s).toLowerCase().replace(/\s+/g, " ").trim();
+function matches(p, q) {
+  const nums = [p.phone, p.old_phone, ...(p.other_phones || []), (p.pay2 || {}).number, (p.pay4 || {}).number].filter(Boolean);
+  if (squash(`${p.name} ${p.pid} ${nums.join(" ")}`).includes(squash(q))) return true;
+  const d = phoneQuery(q);
+  return !!d && nums.some((n) => digits(n).includes(d));
+}
 function filtered() {
   const list = isPay() ? PAY_TABS : [...TABS, ...MORE];
   const f = (list.find((x) => x[0] === filter) || list[0])[1];
-  const q = $("#search").value.trim().toLowerCase();
+  const q = $("#search").value.trim();
   const tag = isPay() ? "" : $("#tagSel").value;
   const rank = { fu4: 0, fu2: 1, check_number: 1, main_remind: 2, main_restart: 2, main_invite: 3 };
-  return base().filter(f)
-    .filter((p) => !tag || (p.tags || []).includes(tag) || pending().some((l) => l.participant_id === p.pid && (l.tags || "").includes(tag)))
-    .filter((p) => !q || `${p.name} ${p.pid} ${p.phone} ${p.old_phone || ""} ${(p.pay2 || {}).number || ""} ${(p.pay4 || {}).number || ""}`.toLowerCase().includes(q))
-    .sort(isPay()
+  const ps = q ? base().filter((p) => matches(p, q)) : base().filter(f)
+    .filter((p) => !tag || (p.tags || []).includes(tag) || pending().some((l) => l.participant_id === p.pid && (l.tags || "").includes(tag)));
+  return ps.sort(isPay()
       ? (a, b) => String(a.fu2_date || a.fu4_date).localeCompare(String(b.fu2_date || b.fu4_date)) || a.pid.localeCompare(b.pid)
       : (a, b) => (rank[a.action] ?? 9) - (rank[b.action] ?? 9) || String(a.fu4_due || a.fu2_due).localeCompare(String(b.fu4_due || b.fu2_due)) || a.pid.localeCompare(b.pid));
 }
@@ -584,7 +620,8 @@ const waLink = (p) => `https://api.whatsapp.com/send?phone=92${p.phone.slice(1)}
 function renderList() {
   const all = filtered();
   const items = all.slice(0, shown);
-  $("#count").textContent = `${items.length.toLocaleString()} ${t("shown")} · ${all.length.toLocaleString()}`;
+  $("#count").textContent = `${items.length.toLocaleString()} ${t("shown")} · ${all.length.toLocaleString()}` +
+    ($("#search").value.trim() ? ` · ${t("searchAll")}` : "");
   $("#moreBtn").hidden = all.length <= shown;
   $("#list").innerHTML = items.map((p) => (isPay() ? payCard(p) : personCard(p))).join("");
   $("#list").querySelectorAll("[data-log]").forEach((b) => b.onclick = () => openLog(b.dataset.log));

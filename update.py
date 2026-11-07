@@ -27,6 +27,10 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 HERE = os.path.dirname(os.path.abspath(__file__))
 CFG = json.load(open(os.path.join(HERE, "config.json"), encoding="utf-8"))
 ENUS = CFG["enumerators"]
+# a login split in two, e.g. {"ENU06B": "ENU06"}: a second WhatsApp number for one enumerator's people
+# (split_login.py). The pair counts as one enumerator for new people and shares one target.
+SPLIT = CFG.get("split", {})
+slot = lambda e: SPLIT.get(e, e)
 TODAY = date.today()
 P = lambda *a: os.path.join(HERE, *a)
 STATE = P("state", "people.csv")
@@ -188,6 +192,14 @@ def encrypt(obj, passphrase):
     ct = AESGCM(key).encrypt(iv, json.dumps(obj, ensure_ascii=False).encode("utf-8"), None)
     b64 = lambda b: base64.b64encode(b).decode("ascii")
     return {"v": 1, "kdf": "PBKDF2-SHA256", "iter": PBKDF2_ITER, "salt": b64(salt), "iv": b64(iv), "ct": b64(ct)}
+
+
+def decrypt(blob, passphrase):
+    """Inverse of encrypt() (used by split_login.py to read the last published ADMIN file)."""
+    d = lambda k: base64.b64decode(blob[k])
+    key = PBKDF2HMAC(algorithm=hashes.SHA256(), length=32, salt=d("salt"), iterations=blob["iter"]).derive(
+        passphrase.encode("utf-8"))
+    return json.loads(AESGCM(key).decrypt(d("iv"), d("ct"), None))
 
 
 # ============================================================ state (stable IDs + assignment)
@@ -394,7 +406,9 @@ def main():
         rows = []
         for n in sorted(new_people, key=lambda x: (x["first_seen"], x["phone"])):
             seq += 1
-            e = min(ENUS, key=lambda c: (load[c], c))
+            # a split pair gets one enumerator's share; inside the pair, the login with fewer people
+            s = min({slot(c) for c in ENUS}, key=lambda c: (sum(load[x] for x in ENUS if slot(x) == c), c))
+            e = min((x for x in ENUS if slot(x) == s), key=lambda c: (load[c], c))
             load[e] += 1
             n2 = {k: n.get(k, "") for k in STATE_COLS}
             n2.update(participant_id=str(seq) + luhn_digit(str(seq)), enumerator=e)
@@ -421,14 +435,19 @@ def main():
     # ---------------- statuses
     people = []
     pid_of = state.participant_id.to_dict()
+    nums = {}                 # every number that leads to a person (new number, same person, second registration)
+    for ph, k in known.items():
+        nums.setdefault(k, set()).add(ph)
     for i, s in state.iterrows():
         if i in merged or i in same:
             continue          # second registration of the same person: shown under their first ID
         mine = logs.get(s.participant_id, []) + [l for j, k in merged.items() if k == i for l in logs.get(pid_of[j], [])]
         mine += [dict(l, other_id=pid_of[j]) for j, k in same.items() if k == i for l in logs.get(pid_of[j], [])]
-        people.append(build_person(i, s, main.get(i, []), fu["fu2"].get(i), fu["fu4"].get(i),
-                                   sorted(mine, key=lambda x: x["time"]), new_number.get(i),
-                                   reopen.get(s.participant_id, "")))
+        p = build_person(i, s, main.get(i, []), fu["fu2"].get(i), fu["fu4"].get(i),
+                         sorted(mine, key=lambda x: x["time"]), new_number.get(i), reopen.get(s.participant_id, ""))
+        # the other numbers this person used: the portal's search finds them by these too
+        p["other_phones"] = sorted(nums.get(i, set()) - {p["phone"], p["old_phone"]})
+        people.append(p)
 
     # ---------------- save state (backup first)
     if os.path.exists(STATE):
@@ -448,12 +467,17 @@ def main():
               "fu2_day": CFG["fu2_day"], "fu4_day": CFG["fu4_day"], "late_days": CFG.get("late_days", 3),
               "pay_fu2": CFG.get("pay_fu2", 200), "pay_fu4": CFG.get("pay_fu4", 150)}
     hidden_admin = ("age", "under_18", "gender", "video_seen", "n_video_attempts")
+    target = lambda e: round(public["target"] / sum(slot(x) == slot(e) for x in ENUS))   # a split pair shares one
     for e in ENUS:
-        mine = [{k: v for k, v in p.items() if k not in hidden_admin} for p in people if p["enumerator"] == e]
-        obj = dict(public, role="enumerator", code=e, log_token=sec[e]["log_token"], people=mine)
+        # an enumerator sees only the calls of their own login (or its split pair) and payments: a second ID
+        # folded in from another enumerator's list (same_person.csv) must never show who else called the person
+        mine = [dict({k: v for k, v in p.items() if k not in hidden_admin},
+                     calls=[c for c in p["calls"] if c.get("enumerator") not in ENUS or slot(c["enumerator"]) == slot(e)])
+                for p in people if p["enumerator"] == e]
+        obj = dict(public, role="enumerator", code=e, target=target(e), log_token=sec[e]["log_token"], people=mine)
         json.dump(encrypt(obj, sec[e]["passphrase"]), open(P("docs", "data", f"{e}.json.enc"), "w"))
     adm = dict(public, role="admin", code="ADMIN", log_token=sec["ADMIN"]["log_token"], people=people,
-               enumerators=ENUS, unmatched=unmatched,
+               enumerators=ENUS, split=SPLIT, targets={e: target(e) for e in ENUS}, unmatched=unmatched,
                merged=[{"pid": pid_of[j], "into": pid_of[i]} for j, i in {**merged, **same}.items()])
     # PAY login (payment firm): only people who completed a follow-up; payment details, no survey answers
     pay_keep = ("pid", "enumerator", "name", "phone", "district", "province", "compliance",
@@ -464,7 +488,8 @@ def main():
     payobj = dict(public, role="pay", code="PAY", log_token=sec["PAY"]["log_token"], people=payers, enumerators=ENUS)
     json.dump(encrypt(payobj, sec["PAY"]["passphrase"]), open(P("docs", "data", "PAY.json.enc"), "w"))
     json.dump(encrypt(adm, sec["ADMIN"]["passphrase"]), open(P("docs", "data", "ADMIN.json.enc"), "w"))
-    json.dump({"generated": gen}, open(P("docs", "data", "version.json"), "w"))
+    # public: the login list for the sign-in menu (a split login appears without a code change)
+    json.dump({"generated": gen, "codes": ENUS + ["PAY", "ADMIN"]}, open(P("docs", "data", "version.json"), "w"))
 
     # ---------------- summary
     df = pd.DataFrame(people)

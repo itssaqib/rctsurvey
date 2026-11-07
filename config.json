@@ -7,6 +7,7 @@
     "ENU04",
     "ENU05",
     "ENU06",
+    "ENU06B",
     "ENU07",
     "ENU08",
     "ENU09",
@@ -26,5 +27,8 @@
   "target_per_enumerator": 320,
   "pay_fu2": 200,
   "pay_fu4": 150,
-  "late_days": 3
+  "late_days": 3,
+  "split": {
+    "ENU06B": "ENU06"
+  }
 }

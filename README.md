@@ -4,7 +4,7 @@ A phone-friendly web page with three kinds of login:
 
 | Login | Who | Sees |
 |---|---|---|
-| ENU01 … ENU10 | enumerators | only their own participants: status, what to do next, Call / WhatsApp, call log |
+| ENU01 … ENU10 (+ split logins such as ENU06B) | enumerators | only their own participants: status, what to do next, Call / WhatsApp, call log |
 | PAY | payment firm (CANE Technologies) | only people whose payment is due or done: amount, method, account number; marks payments as paid |
 | ADMIN | research team | everyone, per-enumerator table, problem flags |
 
@@ -93,6 +93,11 @@ completion, or from the day the video was watched for partial compliance):
 date gets a red "N days late" tag, a red border and its due date in bold red; the Follow-ups tab
 shows the number in red, and *More… → Follow-up late* lists them.
 
+**Search.** The search box (name, ID, or any of the person's numbers: contact, old, other or payment
+number) looks through all of the login's people, whatever tab or tag is selected, so someone whose
+follow-ups are done is still found when they call or message again. Numbers can be typed in any form
+(`+92 345 …`, `0345-…`, Urdu digits). Picking a tab, tile or filter clears the search.
+
 **New phone number.** Add a line to `state/number_changes.csv` (`participant_id,new_phone,date,note`;
 the date is filled in if left empty) and run `update.py`. ID and enumerator stay the same; calls,
 WhatsApp and the payment fallback use the new number; survey answers with either number still
@@ -103,9 +108,25 @@ Checks). Deleting the line undoes it.
 **Same person under two IDs** (e.g. main survey from one number, follow-up from another). Add a line
 to `state/same_person.csv` (`keep_id,other_id,date,note`) and run `update.py`. `other_id` is folded
 into `keep_id`: survey answers from either number count for `keep_id`, now and in later waves; its
-call history is shown there, marked with the other ID; the contact number and enumerator stay those of
-`keep_id`. `other_id` can also be a phone number that is not in the study (a follow-up typed with a
+call history is shown there, marked with the other ID (an enumerator's login shows only the calls that
+enumerator logged, never another enumerator's; ADMIN sees all); its numbers are found by search but
+not shown on the card (some are only typos); the contact number and enumerator stay those of `keep_id`. `other_id` can also be a phone number that is not in the study (a follow-up typed with a
 wrong number): answers typed with it then count for `keep_id`. Deleting the line undoes it.
+
+**Split login (a second WhatsApp number for one enumerator).** Too many messages from one number
+get it blocked, so one enumerator's list can be split over two logins (pilot since 8 Nov 2026:
+ENU06 + ENU06B). Run `update.py`, then `python split_login.py ENU06 ENU06B`, then `update.py` again.
+Only untouched people move to the new login (main survey never opened, no survey response, no call
+or WhatsApp logged, no tags, not in a team list), at most half of the list, chosen at random with a
+fixed seed; everyone with any history stays with the first login. The moved IDs are in
+`state/split_ENU06B.csv`. `config.json` then lists the new login and `"split": {"ENU06B": "ENU06"}`:
+the pair counts as one enumerator when new people are shared out (inside the pair the login with
+fewer people gets them), the two logins share one target (half each), and each sees the other's calls
+on its own people. The sign-in menu reads the logins from `docs/data/version.json`, so no code change
+is needed. After the first run, paste `secrets/apps_script_tokens.json` into the Apps Script property
+TOKENS (otherwise the new login cannot save calls) and give the new passphrase from
+`secrets/passphrases.json` privately. Undo: `python split_login.py --undo ENU06B` (everyone in ENU06B,
+including new people since, goes back to ENU06), then `update.py` and push.
 
 **Response links (for the analysis).** Each run writes `state/response_links.csv`: every main and
 follow-up response (`response_id`) with the `participant_id` it belongs to, the number typed in the
