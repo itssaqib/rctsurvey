@@ -51,6 +51,7 @@ const T = {
     byEnum: "Completions by enumerator", target: "Target", details: "Details per enumerator",
     checks: "Checks", unmatched: "Follow-ups from numbers not in the study",
     lateTag: "{n} days late", late: "late", payHold: "On hold", newNumber: "New number",
+    inPair: "In {code}'s list", logInPair: "Log it in {code}",
   },
   ur: {
     title: "فیلڈ ورک ٹریکر", subtitle: "سنی–شیعہ تحقیق · شرکاء سے رابطہ", code: "آپ کا کوڈ",
@@ -79,6 +80,7 @@ const T = {
     byEnum: "انیومریٹر کے حساب سے", target: "ہدف", details: "ہر انیومریٹر کی تفصیل",
     checks: "جانچ", unmatched: "ایسے نمبروں سے فالو اپ جو تحقیق میں نہیں",
     lateTag: "{n} دن کی تاخیر", late: "تاخیر", payHold: "روکی گئی", newNumber: "نیا نمبر",
+    inPair: "{code} کی فہرست میں", logInPair: "{code} میں درج کریں",
   },
 };
 const STATUS = {
@@ -186,6 +188,9 @@ const lateWave = (p) => (p.action === "do_not_contact" ? "" :
   ["fu4", "fu2"].find((w) => FU_ACTIVE.includes(p[`${w}_status`]) && daysSince(p[`${w}_due`]) > (D.late_days ?? 3)) || "");
 const payHold = (p) => [p.pay2, p.pay4].some((x) => x && x.status === "hold");
 const payDue = (p) => (p.pay2 && p.pay2.status === "due") || (p.pay4 && p.pay4.status === "due");
+/* PAY list order: the oldest payment still due first (its survey completion date) */
+const payOrder = (p) => String([["pay2", p.fu2_date], ["pay4", p.fu4_date]].filter(([k]) => p[k] && p[k].status === "due")
+  .map(([, d]) => d).sort()[0] || p.fu2_date || p.fu4_date || "");
 const payPaid = (p) => (p.pay2 && p.pay2.status === "paid") || (p.pay4 && p.pay4.status === "paid");
 const contactedToday = (p) => logsFor(p).some((l) => !String(l.outcome).startsWith("paid") && normDay(l.day || l.time) === today());
 /* main tabs (always visible) and the extra filters in the "More…" menu */
@@ -208,7 +213,8 @@ const MORE = [
   ["payhold", payHold, "Payment on hold", "ادائیگی روکی گئی"],
   ["dnc", (p) => p.action === "do_not_contact", "Do not contact", "رابطہ نہ کریں"],
 ];
-const PAY_TABS = [
+const PAY_TABS = [         /* "All due" first: 2-week and 4-week payments in one list (and one CSV) */
+  ["paydue", payDue, "All due", "تمام باقی"],
   ["pay2due", (p) => p.pay2.status === "due", "2-week due (PKR 200)", "2 ہفتے باقی (200)"],
   ["pay4due", (p) => p.pay4.status === "due", "4-week due (PKR 150)", "4 ہفتے باقی (150)"],
   ["paid", payPaid, "Paid", "ادا ہو گئی"],
@@ -273,7 +279,7 @@ async function login(code, pass, remember) {
     if (remember) store.set("ss_auth", JSON.stringify({ code, pass })); else store.del("ss_auth");
     $("#login").hidden = true; $("#main").hidden = false;
     $("#whoCode").textContent = code; $("#genTime").textContent = D.generated;
-    filter = isPay() ? "pay2due" : "today";
+    filter = isPay() ? "paydue" : "today";
     setupMain(); render();
     await flushPending(); await syncLive(false);
   } catch (e) {
@@ -488,8 +494,11 @@ function renderStats() {
 
 /* ---- ADMIN: chart by enumerator + collapsible details ---- */
 function adminChart() {
-  const E = D.enumerators, tgt = D.target || 320;
-  const data = E.map((e) => ({ e, r: rounds(D.people.filter((p) => p.enumerator === e)) }));
+  /* one group per enumerator: a split pair (ENU01 + ENU01B) is drawn together against the full target */
+  const split = D.split || {}, tgt = D.target || 320;
+  const E = D.enumerators.filter((e) => !split[e]);
+  const data = E.map((e) => ({ e, parts: D.enumerators.filter((x) => (split[x] || x) === e),
+    r: rounds(D.people.filter((p) => (split[p.enumerator] || p.enumerator) === e)) }));
   const ymax = Math.max(tgt, ...data.flatMap((d) => d.r.map((x) => x.n))) * 1.08;
   const W = 720, H = 260, m = { l: 34, r: 8, t: 14, b: 26 };
   const iw = W - m.l - m.r, ih = H - m.t - m.b, gw = iw / E.length, bw = Math.min(16, (gw - 14) / 3);
@@ -504,9 +513,7 @@ function adminChart() {
   data.forEach((d, i) => {
     const x0 = m.l + i * gw + (gw - (3 * bw + 4)) / 2;
     g += d.r.map((r, k) => bar(x0 + k * (bw + 2), r.n, r.color)).join("");
-    g += `<text class="axis" x="${m.l + i * gw + gw / 2}" y="${H - 8}" text-anchor="middle">${d.e.replace("ENU", "")}</text>`;
-    const lt = (D.targets || {})[d.e];      // a split login's own share of the target
-    if (lt && lt !== tgt) g += `<line class="target" x1="${m.l + i * gw + 4}" x2="${m.l + (i + 1) * gw - 4}" y1="${y(lt)}" y2="${y(lt)}"/>`;
+    g += `<text class="axis" x="${m.l + i * gw + gw / 2}" y="${H - 8}" text-anchor="middle">${d.e.replace("ENU", "")}${d.parts.length > 1 ? "+B" : ""}</text>`;
     g += `<rect class="hit" data-i="${i}" x="${m.l + i * gw}" y="${m.t}" width="${gw}" height="${ih}"/>`;
   });
   g += `<line class="target" x1="${m.l}" x2="${W - m.r}" y1="${y(tgt)}" y2="${y(tgt)}"/>
@@ -555,7 +562,7 @@ function renderAdmin() {
   panel.querySelectorAll(".hit").forEach((h) => {
     const d = ch.data[+h.dataset.i];
     h.addEventListener("mousemove", (ev) => {
-      tip.innerHTML = `<b>${d.e}</b><br>${d.r.map((r) => `${r.label}: ${r.n} (+${r.extra} partial)`).join("<br>")}`;
+      tip.innerHTML = `<b>${d.parts.join(" + ")}</b><br>${d.r.map((r) => `${r.label}: ${r.n} (+${r.extra} partial)`).join("<br>")}`;
       tip.hidden = false; tip.style.left = `${Math.min(ev.clientX + 12, innerWidth - 250)}px`; tip.style.top = `${ev.clientY + 12}px`;
     });
     h.addEventListener("mouseleave", () => { tip.hidden = true; });
@@ -601,10 +608,11 @@ function filtered() {
   const q = $("#search").value.trim();
   const tag = isPay() ? "" : $("#tagSel").value;
   const rank = { fu4: 0, fu2: 1, check_number: 1, main_remind: 2, main_restart: 2, main_invite: 3 };
-  const ps = q ? base().filter((p) => matches(p, q)) : base().filter(f)
+  // search also looks in the other login of a split pair (someone who wrote to the other WhatsApp number)
+  const ps = q ? [...base(), ...(D.pair_people || [])].filter((p) => matches(p, q)) : base().filter(f)
     .filter((p) => !tag || (p.tags || []).includes(tag) || pending().some((l) => l.participant_id === p.pid && (l.tags || "").includes(tag)));
   return ps.sort(isPay()
-      ? (a, b) => String(a.fu2_date || a.fu4_date).localeCompare(String(b.fu2_date || b.fu4_date)) || a.pid.localeCompare(b.pid)
+      ? (a, b) => payOrder(a).localeCompare(payOrder(b)) || a.pid.localeCompare(b.pid)
       : (a, b) => (rank[a.action] ?? 9) - (rank[b.action] ?? 9) || String(a.fu4_due || a.fu2_due).localeCompare(String(b.fu4_due || b.fu2_due)) || a.pid.localeCompare(b.pid));
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -687,10 +695,11 @@ function personCard(p) {
   const lw = lateWave(p);
   const lateB = lw ? `<span class="b late">⚠ ${t("lateTag").replace("{n}", daysSince(p[`${lw}_due`]))}</span>` : "";
   const newNo = p.old_phone ? ` <span class="b info" title="${esc(p.old_phone)}">${t("newNumber")}</span>` : "";
+  const pairB = p.pair_login ? `<span class="b info strong">${esc(t("inPair").replace("{code}", p.enumerator))}</span>` : "";
   return `<article class="card ${p.call_today && !contactedToday(p) ? "today" : ""} ${lw ? "late" : ""}">
     <div class="row1"><span class="nm">${esc(p.name) || "—"}</span>
       <span class="meta">${p.pid} · ${p.phone}${newNo}${isAdmin() ? " · " + p.enumerator : ""}</span></div>
-    <div class="badges">${lateB}${comp}${mainB}${fuBadge(p, "fu2", t("w2"))}${fuBadge(p, "fu4", t("w4"))}
+    <div class="badges">${pairB}${lateB}${comp}${mainB}${fuBadge(p, "fu2", t("w2"))}${fuBadge(p, "fu4", t("w4"))}
       ${payBadge(t("pay2"), p.pay2)}${payBadge(t("pay4"), p.pay4)}
 </div>
     <div class="act">➜ <b>${ACTION[lang][p.action] || p.action}</b>${p.next_call ? ` · ${t("nextCallShort")}: ${p.next_call}` : ""}</div>
@@ -699,7 +708,9 @@ function personCard(p) {
       <a class="btn" href="tel:${p.phone}">📞 ${t("call")}</a>
       <a class="btn" ${canMsg ? `href="${waLink(p)}" target="_blank" rel="noopener"` : 'aria-disabled="true"'}>💬 ${t("wa")}</a>
       <a class="btn" ${canMsg ? `href="${esc(smsLink(p))}"` : 'aria-disabled="true"'}>✉️ ${t("sms")}</a>
-      <button class="btn primary" data-log="${p.pid}">✎ ${t("log")}</button>
+      ${p.pair_login                            // the Apps Script accepts a call only from the person's own login
+        ? `<span class="btn primary" aria-disabled="true">✎ ${esc(t("logInPair").replace("{code}", p.enumerator))}</span>`
+        : `<button class="btn primary" data-log="${p.pid}">✎ ${t("log")}</button>`}
     </div>
     <details class="hist"><summary>${t("history")} (${logs.length})</summary>${histList(logs)}</details></article>`;
 }
@@ -716,7 +727,8 @@ function payCard(p) {
   };
   return `<article class="card ${payDue(p) ? "today" : ""}">
     <div class="row1"><span class="nm">${esc(p.name) || "—"}</span><span class="meta">${p.pid} · ${p.phone} · ${p.enumerator}</span></div>
-    ${block("pay2", t("pay2"), p.fu2_date)}${block("pay4", t("pay4"), p.fu4_date)}
+    ${[["pay2", t("pay2"), p.fu2_date], ["pay4", t("pay4"), p.fu4_date]]     // a payment still due above a paid one
+      .sort((a, b) => (p[a[0]].status === "due" ? 0 : 1) - (p[b[0]].status === "due" ? 0 : 1)).map((x) => block(...x)).join("")}
     <details class="hist"><summary>${t("history")} (${logs.length})</summary>${histList(logs)}</details></article>`;
 }
 
@@ -794,6 +806,7 @@ function exportPay() {
   for (const p of filtered()) for (const [w, label, d] of [["pay2", "2-week", p.fu2_date], ["pay4", "4-week", p.fu4_date]]) {
     const pay = p[w];
     if (pay.status === "not_due") continue;
+    if (filter === "paydue" && pay.status !== "due") continue;
     if (filter === "pay2due" && w !== "pay2") continue;
     if (filter === "pay4due" && w !== "pay4") continue;
     rows.push([p.pid, p.name, label, pay.amount, pay.method, pay.number, d, pay.status, pay.date, pay.ref, p.enumerator]);

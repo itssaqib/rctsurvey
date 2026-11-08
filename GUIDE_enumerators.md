@@ -23,6 +23,9 @@
 6. To find anyone, for example someone who calls or messages you after finishing their survey,
    type their name, ID or number in the search box. Search looks through all your people, whatever
    tab is open. A number can be typed in any form (0345-…, +92 345 …).
+7. You have two logins, **A** (ENU__) and **B** (ENU__B), each with its own WhatsApp number. Use login A
+   on the phone with WhatsApp number A, and login B on the phone with number B. Search also finds the
+   people of your other login: their card says *In ENU__B's list*. Log that call in the other login.
 
 ## اردو
 
@@ -36,3 +39,4 @@
 4. "رابطہ نہ کریں" یا "مرکزی لنک دوبارہ نہ بھیجیں" کا مطلب یہی ہے — ان سے رابطہ نہ کریں۔
 5. آپ صرف اپنے شرکاء دیکھ سکتے ہیں۔ پاس فریز، فہرست کا اسکرین شاٹ یا نمبر کسی کو نہ دیں۔ فہرست روزانہ ریسرچ ٹیم اپ ڈیٹ کرتی ہے۔
 6. کسی کو بھی ڈھونڈنے کے لیے، مثلاً جو سروے مکمل کرنے کے بعد دوبارہ کال یا میسج کرے، سرچ باکس میں اس کا نام، آئی ڈی یا نمبر لکھیں۔ تلاش آپ کے تمام شرکاء میں ہوتی ہے، چاہے کوئی بھی ٹیب کھلا ہو۔ نمبر کسی بھی طرح لکھ سکتے ہیں (0345-… یا ‎+92 345 …)۔
+7. آپ کے دو لاگ ان ہیں، **A** ‏(ENU__) اور **B** ‏(ENU__B)، اور ہر ایک کا اپنا واٹس ایپ نمبر ہے۔ جس فون پر واٹس ایپ نمبر A ہے اس پر لاگ ان A استعمال کریں، اور جس پر نمبر B ہے اس پر لاگ ان B۔ تلاش آپ کے دوسرے لاگ ان کے لوگ بھی دکھاتی ہے: ان کے کارڈ پر *ENU__B کی فہرست میں* لکھا ہوتا ہے۔ ایسی کال دوسرے لاگ ان میں درج کریں۔

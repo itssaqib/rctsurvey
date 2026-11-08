@@ -471,10 +471,14 @@ def main():
     for e in ENUS:
         # an enumerator sees only the calls of their own login (or its split pair) and payments: a second ID
         # folded in from another enumerator's list (same_person.csv) must never show who else called the person
-        mine = [dict({k: v for k, v in p.items() if k not in hidden_admin},
-                     calls=[c for c in p["calls"] if c.get("enumerator") not in ENUS or slot(c["enumerator"]) == slot(e)])
-                for p in people if p["enumerator"] == e]
-        obj = dict(public, role="enumerator", code=e, target=target(e), log_token=sec[e]["log_token"], people=mine)
+        view = lambda p: dict({k: v for k, v in p.items() if k not in hidden_admin},
+                              calls=[c for c in p["calls"] if c.get("enumerator") not in ENUS or slot(c["enumerator"]) == slot(e)])
+        mine = [view(p) for p in people if p["enumerator"] == e]
+        # the other login of a split pair (same enumerator, second WhatsApp number): found by search only, for
+        # someone who writes to the other number; the card says which login to log the call in
+        pair = [dict(view(p), pair_login=True) for p in people if p["enumerator"] != e and slot(p["enumerator"]) == slot(e)]
+        obj = dict(public, role="enumerator", code=e, target=target(e), log_token=sec[e]["log_token"], people=mine,
+                   pair_people=pair)
         json.dump(encrypt(obj, sec[e]["passphrase"]), open(P("docs", "data", f"{e}.json.enc"), "w"))
     adm = dict(public, role="admin", code="ADMIN", log_token=sec["ADMIN"]["log_token"], people=people,
                enumerators=ENUS, split=SPLIT, targets={e: target(e) for e in ENUS}, unmatched=unmatched,

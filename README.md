@@ -125,14 +125,18 @@ wrong number): answers typed with it then count for `keep_id`. Deleting the line
 
 **Split login (a second WhatsApp number for one enumerator).** Too many messages from one number
 get it blocked, so one enumerator's list can be split over two logins (pilot since 8 Nov 2026:
-ENU06 + ENU06B). Run `update.py`, then `python split_login.py ENU06 ENU06B`, then `update.py` again.
+ENU06 + ENU06B; since 9 Nov every enumerator: part A is the original login ENU01 … ENU10, part B is
+ENU01B … ENU10B). Run `update.py`, then `python split_login.py ENU06 ENU06B`, then `update.py` again.
 Only untouched people move to the new login (main survey never opened, no survey response, no call
 or WhatsApp logged, no tags, not in a team list), at most half of the list, chosen at random with a
 fixed seed; everyone with any history stays with the first login. The moved IDs are in
 `state/split_ENU06B.csv`. `config.json` then lists the new login and `"split": {"ENU06B": "ENU06"}`:
 the pair counts as one enumerator when new people are shared out (inside the pair the login with
 fewer people gets them), the two logins share one target (half each), and each sees the other's calls
-on its own people. The sign-in menu reads the logins from `docs/data/version.json`, so no code change
+on its own people. Search in one login also finds the other login's people (someone who writes to the
+other WhatsApp number). Their card says "In ENU06B's list" and has no Log button, because the Apps
+Script accepts a call only from the person's own login. The ADMIN chart draws each pair as one
+enumerator against the full target; the table below it lists every login. The sign-in menu reads the logins from `docs/data/version.json`, so no code change
 is needed. After the first run, paste `secrets/apps_script_tokens.json` into the Apps Script property
 TOKENS (otherwise the new login cannot save calls) and give the new passphrase from
 `secrets/passphrases.json` privately. Undo: `python split_login.py --undo ENU06B` (everyone in ENU06B,
@@ -153,7 +157,9 @@ follow-up, **PKR 150** after the 4-week follow-up. A payment becomes *Due* when 
 follow-up is completed; method and account number come from the participant's answers
 in that follow-up (fallback: their phone number). PAY sends the money, presses **Mark as
 paid** and enters the transaction ID → the payment shows as *Paid* for the enumerator
-and ADMIN straight away. PAY can also download the due list as CSV.
+and ADMIN straight away. PAY opens on **All due**: 2-week and 4-week payments together, oldest first,
+and a payment still due is shown above one already paid. The CSV of that tab has both waves (column
+`wave`); the 2-week and 4-week tabs give one wave each.
 A follow-up completed by someone with no main survey (or no video) under that number is
 **on hold**: PAY does not see it, and the enumerator is asked to find out which number they used
 for the main survey (then add it as a number change, or tell the team).
