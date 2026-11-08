@@ -29,11 +29,11 @@ const T = {
     passphrase: "Passphrase", remember: "Remember on this phone", open: "Open my list", updated: "Updated",
     logout: "Log out", search: "Search name, ID or phone", searchAll: "searching everyone (all tabs)",
     export: "Download list (CSV)",
-    exportLogs: "Download my unsent logs", more: "Show more", outcome: "What happened?", tags: "Tags", waPart: "WhatsApp", callPart: "Phone call",
-    pickOne: "Choose what happened (WhatsApp, call or both).",
+    exportLogs: "Download my unsent logs", more: "Show more", outcome: "What happened?", tags: "Tags", waPart: "WhatsApp / SMS", callPart: "Phone call",
+    pickOne: "Choose what happened (message, call or both).",
     nextCall: "Next call date (optional)", note: "Note (optional)", cancel: "Cancel", save: "Save",
     badPass: "Wrong code or passphrase.", noData: "No data file for this code yet.", allTags: "All tags",
-    allEnus: "All enumerators", shown: "shown", call: "Call", wa: "WhatsApp", log: "Log call",
+    allEnus: "All enumerators", shown: "shown", call: "Call", wa: "WhatsApp", sms: "SMS", log: "Log call",
     history: "History", noCalls: "Nothing logged yet.", savedOnline: "Saved.", savedLocal:
     "Saved on this phone. It will be sent when you are online.", pending: "not yet synced",
     main: "Main", w2: "2-week", w4: "4-week", refresh: "Refresh", nextCallShort: "Next call",
@@ -57,11 +57,11 @@ const T = {
     passphrase: "پاس فریز", remember: "اس فون پر یاد رکھیں", open: "میری فہرست کھولیں", updated: "اپ ڈیٹ",
     logout: "لاگ آؤٹ", search: "نام، آئی ڈی یا نمبر تلاش کریں", searchAll: "سب میں تلاش (تمام ٹیب)",
     export: "فہرست ڈاؤن لوڈ کریں (CSV)",
-    exportLogs: "نہ بھیجی گئی کالز ڈاؤن لوڈ کریں", more: "مزید دکھائیں", outcome: "کیا ہوا؟", tags: "ٹیگ", waPart: "واٹس ایپ", callPart: "فون کال",
-    pickOne: "بتائیں کیا ہوا (واٹس ایپ، کال یا دونوں)۔",
+    exportLogs: "نہ بھیجی گئی کالز ڈاؤن لوڈ کریں", more: "مزید دکھائیں", outcome: "کیا ہوا؟", tags: "ٹیگ", waPart: "واٹس ایپ / ایس ایم ایس", callPart: "فون کال",
+    pickOne: "بتائیں کیا ہوا (پیغام، کال یا دونوں)۔",
     nextCall: "اگلی کال کی تاریخ (اختیاری)", note: "نوٹ (اختیاری)", cancel: "منسوخ", save: "محفوظ کریں",
     badPass: "کوڈ یا پاس فریز غلط ہے۔", noData: "اس کوڈ کی فائل ابھی موجود نہیں۔", allTags: "تمام ٹیگ",
-    allEnus: "تمام انیومریٹرز", shown: "دکھائے گئے", call: "کال", wa: "واٹس ایپ", log: "کال درج کریں",
+    allEnus: "تمام انیومریٹرز", shown: "دکھائے گئے", call: "کال", wa: "واٹس ایپ", sms: "ایس ایم ایس", log: "کال درج کریں",
     history: "تاریخ", noCalls: "ابھی کچھ درج نہیں۔", savedOnline: "محفوظ ہو گیا۔", savedLocal:
     "اس فون پر محفوظ ہے، انٹرنیٹ ملنے پر بھیج دیا جائے گا۔", pending: "ابھی سنک نہیں ہوا",
     main: "مرکزی سروے", w2: "2 ہفتے", w4: "4 ہفتے", refresh: "تازہ کریں", nextCallShort: "اگلی کال",
@@ -107,10 +107,13 @@ const ACTION = {
         all_done: "تمام سروے مکمل", do_not_contact: "رابطہ نہ کریں",
         check_number: "فالو اپ مکمل، لیکن اس نمبر پر مرکزی سروے نہیں ملا — پوچھیں کہ مرکزی سروے کس نمبر سے بھرا تھا اور ایڈمن کو بتائیں" },
 };
-/* a contact entry can record a WhatsApp message AND a phone call together (one of each at most) */
+/* a contact entry can record one message (WhatsApp OR SMS) AND a phone call together; the Apps Script
+   keeps 30 characters of the outcome, so a third part ("whatsapp_sent+sms_sent+no_answer") would not fit */
 const WA_OPTS = [
-  ["whatsapp_sent", "Message sent", "پیغام بھیجا"],
-  ["whatsapp_reply", "They replied", "انہوں نے جواب دیا"],
+  ["whatsapp_sent", "WhatsApp sent", "واٹس ایپ بھیجا"],
+  ["whatsapp_reply", "WhatsApp reply", "واٹس ایپ پر جواب آیا"],
+  ["sms_sent", "SMS sent", "ایس ایم ایس بھیجا"],
+  ["sms_reply", "SMS reply", "ایس ایم ایس پر جواب آیا"],
 ];
 const CALL_OPTS = [
   ["reached", "Reached — will fill it", "بات ہوئی — سروے کریں گے"],
@@ -125,6 +128,8 @@ const CALL_OPTS = [
 const OUTCOMES = [         /* labels for the history (older entries used single outcomes) */
   ["whatsapp_sent", "WhatsApp message sent", "واٹس ایپ پیغام بھیجا"],
   ["whatsapp_reply", "Replied on WhatsApp", "واٹس ایپ پر جواب آیا"],
+  ["sms_sent", "SMS sent", "ایس ایم ایس بھیجا"],
+  ["sms_reply", "Replied by SMS", "ایس ایم ایس پر جواب آیا"],
   ["reached", "Reached — will fill it", "بات ہوئی — سروے کریں گے"],
   ["reached_done", "Says already done", "کہتے ہیں مکمل کر لیا"],
   ["no_answer", "No answer", "جواب نہیں دیا"],
@@ -156,6 +161,23 @@ const MSG = {
   wait_next: "السلام علیکم {name}! ہمارے سروے میں حصہ لینے کا بہت شکریہ۔ اگلا مختصر فالو اپ سروے آپ کو {date} کو بھیجا جائے گا۔",
   check_number: "السلام علیکم {name}! فالو اپ سروے مکمل کرنے کا شکریہ۔ ہمیں آپ کا پہلا (مرکزی) سروے اس نمبر پر نہیں ملا۔ براہِ کرم بتائیں کہ آپ نے پہلا سروے کس موبائل نمبر سے بھرا تھا، تاکہ آپ کی ادائیگی بھیجی جا سکے۔ شکریہ",
   thanks: "السلام علیکم {name}! ہمارے تمام سروے مکمل کرنے کا بہت شکریہ۔ آپ کی رقم جاز کیش یا ایزی پیسہ کے ذریعے بھیجی جا رہی ہے۔",
+};
+/* SMS: the same message as WhatsApp, shorter and in Roman Urdu. Plain Latin letters keep an SMS at 160
+   characters (Urdu script: 70), so with the link every message fits in 1-2 SMS. smsMessage() leaves out a
+   name in Urdu script (it would turn the whole SMS into Urdu-script SMS) or one that makes it longer than 2 SMS. */
+const SMS = {
+  main_invite: "Assalam o Alaikum {name}! Aap ne hamari research ke liye registration ki thi. Ye survey mukammal karein:\n{link}\nSurvey mein yehi number likhein: {phone}\nSurvey aur 2 follow-up par Rs 350 milenge. Shukriya",
+  main_remind: "Assalam o Alaikum {name}! Aap ka survey abhi mukammal nahi hua. Isi phone par ye link kholein, survey wahin se shuru hoga jahan chhora tha:\n{link}\nShuru se khule to number likhein: {phone}\nShukriya",
+  main_restart: "Assalam o Alaikum {name}! Aap ka pichla survey mukammal nahi hua tha aur ab band ho chuka hai. Ye link khol kar survey dobara shuru se karein:\n{link}\nApna number aise likhein: {phone}\nShukriya",
+  fu2: "Assalam o Alaikum {name}! Survey mein hissa lene ka shukriya. Ab 2 hafte baad ka mukhtasar follow-up survey (10 minute):\n{link}\nApna number aise likhein: {phone}\nMukammal karne par Rs 200 milenge. Shukriya",
+  fu2_continue: "Assalam o Alaikum {name}! Aap ne 2 hafte wala follow-up survey shuru kiya tha ({pct} mukammal). Isi phone par ye link kholein, survey wahin se shuru hoga:\n{link}\nMukammal karne par Rs 200 milenge. Shukriya",
+  fu2_again: "Assalam o Alaikum {name}! Aap ka 2 hafte wala follow-up survey mukammal nahi hua tha. Ye link khol kar dobara karein:\n{link}\nApna number aise likhein: {phone}\nMukammal karne par Rs 200 milenge. Shukriya",
+  fu4: "Assalam o Alaikum {name}! Ye hamara aakhri mukhtasar follow-up survey hai (10 minute):\n{link}\nApna number aise likhein: {phone}\nMukammal karne par Rs 150 milenge. Shukriya",
+  fu4_continue: "Assalam o Alaikum {name}! Aap ne aakhri follow-up survey shuru kiya tha ({pct} mukammal). Isi phone par ye link kholein, survey wahin se shuru hoga:\n{link}\nMukammal karne par Rs 150 milenge. Shukriya",
+  fu4_again: "Assalam o Alaikum {name}! Aap ka aakhri follow-up survey mukammal nahi hua tha. Ye link khol kar dobara karein:\n{link}\nApna number aise likhein: {phone}\nMukammal karne par Rs 150 milenge. Shukriya",
+  wait_next: "Assalam o Alaikum {name}! Hamare survey mein hissa lene ka bohat shukriya. Agla mukhtasar follow-up survey aap ko {date} ko bheja jayega.",
+  check_number: "Assalam o Alaikum {name}! Follow-up survey mukammal karne ka shukriya. Hamein aap ka pehla (main) survey is number par nahi mila. Bataein pehla survey kis number se kiya tha, taake payment bheji ja sake. Shukriya",
+  thanks: "Assalam o Alaikum {name}! Hamare tamam survey mukammal karne ka bohat shukriya. Aap ki raqam JazzCash ya EasyPaisa se bheji ja rahi hai.",
 };
 const FU_ACTIVE = ["due", "overdue", "in_progress", "stopped"];
 const daysSince = (d) => (d ? Math.round((Date.parse(today()) - Date.parse(d)) / 864e5) : -1);
@@ -599,8 +621,8 @@ function payBadge(label, pay) {
     ? `<span class="b ok">${label}: ${t("paid")} ✓</span>`
     : `<span class="b warn">${label}: ${t("payDue")}</span>`;
 }
-/* the WhatsApp message always matches the person's current state (also while waiting) */
-function waMessage(p) {
+/* the WhatsApp / SMS message always matches the person's current state (also while waiting) */
+function fillMessage(p, texts, name) {
   let key = "", link = "";
   const fuKey = (w) => w + ({ in_progress: "_continue", stopped: "_again" }[p[`${w}_status`]] || "");
   if (p.action === "check_number") key = "check_number";
@@ -613,10 +635,21 @@ function waMessage(p) {
   else if (p.compliance) key = "wait_next";
   const w = link === "fu4" ? "fu4" : "fu2";
   const nextDate = p.fu2_status === "not_yet" ? p.fu2_due : p.fu4_due;
-  return (MSG[key] || "").replace("{name}", p.name || "").replace("{link}", (D.links || {})[link] || "")
+  return (texts[key] || "").replace("{name}", name).replace(/\s+!/, "!").replace("{link}", (D.links || {})[link] || "")
     .replace("{phone}", p.phone).replace("{date}", nextDate || "").replace("{pct}", `${p[`${w}_progress`] || 0}%`);
 }
+const waMessage = (p) => fillMessage(p, MSG, p.name || "");
 const waLink = (p) => `https://api.whatsapp.com/send?phone=92${p.phone.slice(1)}&text=${encodeURIComponent(waMessage(p))}`;
+const gsmText = (s) => /^[A-Za-z0-9 \n!"#$%&'()*+,\-.\/:;<=>?@_]*$/.test(s);     // plain SMS letters only
+function smsMessage(p) {
+  const full = String(p.name || "").trim();
+  for (const name of [full, full.split(/\s+/)[0], ""]) {        // full name, first name, no name
+    const s = fillMessage(p, SMS, name);
+    if (!name || (gsmText(s) && s.length <= 306)) return s;     // 306 characters = 2 SMS
+  }
+}
+/* sms: link (Android: ?body=, iPhone: &body=) opens the phone's own Messages app with number and text filled in */
+const smsLink = (p) => `sms:${p.phone}${/iPhone|iPad|iPod/.test(navigator.userAgent) ? "&" : "?"}body=${encodeURIComponent(smsMessage(p))}`;
 function renderList() {
   const all = filtered();
   const items = all.slice(0, shown);
@@ -665,6 +698,7 @@ function personCard(p) {
     <div class="btns">
       <a class="btn" href="tel:${p.phone}">📞 ${t("call")}</a>
       <a class="btn" ${canMsg ? `href="${waLink(p)}" target="_blank" rel="noopener"` : 'aria-disabled="true"'}>💬 ${t("wa")}</a>
+      <a class="btn" ${canMsg ? `href="${esc(smsLink(p))}"` : 'aria-disabled="true"'}>✉️ ${t("sms")}</a>
       <button class="btn primary" data-log="${p.pid}">✎ ${t("log")}</button>
     </div>
     <details class="hist"><summary>${t("history")} (${logs.length})</summary>${histList(logs)}</details></article>`;

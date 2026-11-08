@@ -134,8 +134,11 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); out
 .tab .k.late { background: var(--bad); color: var(--card); opacity: 1; font-weight: 700; border-radius: 99px; padding: 1px 7px; }
 .act { font-size: 14px; margin: 2px 0 10px; color: var(--ink-2); }
 .act b { color: var(--ink); }
-.btns { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.btns { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .btns .btn { min-height: 42px; font-size: 14px; }
+/* phones: Call / WhatsApp / SMS in one row, "Log call" full width below */
+@media (max-width: 639px) { .btns { grid-template-columns: repeat(3, 1fr); } .btns .btn.primary { grid-column: 1 / -1; }
+  .btns .btn { padding-inline: 6px; white-space: nowrap; } }
 .hist { margin-top: 10px; font-size: 13px; color: var(--muted); }
 .hist summary { cursor: pointer; color: var(--brand); font-weight: 600; }
 .hist li { margin: 4px 0; }

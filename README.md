@@ -4,7 +4,7 @@ A phone-friendly web page with three kinds of login:
 
 | Login | Who | Sees |
 |---|---|---|
-| ENU01 … ENU10 (+ split logins such as ENU06B) | enumerators | only their own participants: status, what to do next, Call / WhatsApp, call log |
+| ENU01 … ENU10 (+ split logins such as ENU06B) | enumerators | only their own participants: status, what to do next, Call / WhatsApp / SMS, call log |
 | PAY | payment firm (CANE Technologies) | only people whose payment is due or done: amount, method, account number; marks payments as paid |
 | ADMIN | research team | everyone, per-enumerator table, problem flags |
 
@@ -97,6 +97,16 @@ shows the number in red, and *More… → Follow-up late* lists them.
 number) looks through all of the login's people, whatever tab or tag is selected, so someone whose
 follow-ups are done is still found when they call or message again. Numbers can be typed in any form
 (`+92 345 …`, `0345-…`, Urdu digits). Picking a tab, tile or filter clears the search.
+
+**WhatsApp and SMS buttons.** Both open a ready message that matches the person's status, with the
+right link and their number. WhatsApp uses the Urdu text (`MSG` in `docs/app.js`). SMS opens the phone's
+own Messages app with a shorter Roman Urdu text (`SMS` in `docs/app.js`). Plain Latin letters keep an
+SMS at 160 characters (Urdu script: 70), so every message, link included, fits in 1–2 SMS. A name in Urdu
+script is left out of the SMS (it would make every part Urdu-script, 70 characters), and so is a name that
+would make it longer than 2 SMS. SMS goes from the enumerator's own SIM and package. In the log, the
+message row takes one choice, WhatsApp or SMS. The Apps Script keeps 30 characters of the outcome, and
+three parts would not fit. When you change a text, keep it under 306 characters with the link, and
+use plain letters only (no curly quotes or emoji).
 
 **New phone number.** Add a line to `state/number_changes.csv` (`participant_id,new_phone,date,note`;
 the date is filled in if left empty) and run `update.py`. ID and enumerator stay the same; calls,
