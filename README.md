@@ -95,9 +95,9 @@ attempt; for a video shorter than that, `watch_high_share` (90%) of its length i
 the Qualtrics timer of the video page.
 
 The rule is in minutes, not "half of the video", because video length differs by messenger (citizen 2–3.5 min,
-scholars 6–9 min). On the 10 Nov data, the half-video rule gave 30% high watch for citizen videos and 13% for
-Sunni-scholar videos. The 3-minute rule gives 16–26% across messengers and 19–21% across messages, about 20%
-of viewers overall.
+scholars 6–9 min). On the 10 Nov data, the half-video rule gave 30% high watch for citizen videos and 14% for
+Sunni- and Shia-scholar videos. The 3-minute rule gives 15–26% across messengers and 17–21% across messages,
+about 20% of viewers overall.
 
 | Priority | Main survey | Video |
 |---|---|---|
@@ -109,9 +109,11 @@ of viewers overall.
 Within each kind of task the list shows priority 1 first. *More… → Priority 1–4* lists one group, and
 tapping the number explains it. Enumerators see only the number; ADMIN also sees the watched share.
 
-The video lengths are in `config.json` → `video_seconds`, in the order of the survey's 30 video blocks. That
-order was read from the survey's `.qsf` and the lengths from the mp4 files in `../videos`. If videos change,
-update both.
+The video lengths are in `config.json` → `video_seconds`, in the order of the 30 `timer_Page Submit` columns
+of the main-survey export. That order comes from the ImportId row of a CSV export: each column's QID was
+matched to its video block in the survey's `.qsf`. Do not use the order of the blocks in the `.qsf`, which
+differs for the first 9 videos. The lengths come from the mp4 files in `../videos`. If videos change, update
+both.
 
 Watch time is measured after the video was shown, so it is post-treatment. People with priority 3–4 are still
 in the follow-up sample and must still be contacted; the priority only sets the order.

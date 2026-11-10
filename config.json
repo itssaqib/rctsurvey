@@ -53,6 +53,10 @@
   "watch_high_share": 0.9,
   "video_seconds": [
     {
+      "block": "male_sunni_religious",
+      "seconds": 427.9
+    },
+    {
       "block": "male_sunni_scientific",
       "seconds": 458.8
     },
@@ -83,10 +87,6 @@
     {
       "block": "male_non_sect_placebo",
       "seconds": 338.7
-    },
-    {
-      "block": "male_sunni_religious",
-      "seconds": 427.9
     },
     {
       "block": "male_professor_religious",
