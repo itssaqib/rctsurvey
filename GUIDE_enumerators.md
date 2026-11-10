@@ -17,6 +17,10 @@
    * After every call or message press **✎ Log call**, choose what happened (*WhatsApp sent* or
      *SMS sent*, and the call result if you called), add tags
      (e.g. *Call back*), a next call date if they asked, and a short note. Press **Save**.
+   * The number in front of a name is the **priority**. Tap it to see what it means.
+     **1** = main survey finished and watched the video for 3 minutes or more. **2** = main survey 80–99% and
+     watched 3 minutes or more. **3** = finished, watched less. **4** = 80–99%, watched less. Start with 1,
+     then 2, 3, 4, but contact everyone. *More… → Priority 1* shows only that group.
 4. "Do not contact" or "do not send the main link again" means exactly that.
 5. You only see your own participants. Never share the passphrase, screenshots of the
    list, or numbers with anyone. The list is updated by the research team every day.
@@ -36,6 +40,7 @@
    * **📞 کال** نمبر ملاتا ہے۔ **💬 واٹس ایپ** درست لنک اور نمبر کے ساتھ تیار پیغام کھولتا ہے — دیکھ کر بھیج دیں۔
    * **✉️ ایس ایم ایس** فون کی میسج ایپ میں چھوٹا تیار پیغام کھولتا ہے (رومن اردو، 1–2 ایس ایم ایس) — بھیج دیں۔ یہ آپ کی سم سے جاتا ہے۔ ان لوگوں کے لیے استعمال کریں جن کے پاس واٹس ایپ نہیں، یا واٹس ایپ نمبر سے کم پیغام بھیجنے کے لیے۔ دو سم والے فون میں بھیجنے سے پہلے سم منتخب کریں۔
    * ہر کال یا پیغام کے بعد **✎ کال درج کریں** دبائیں، نتیجہ منتخب کریں (*واٹس ایپ بھیجا* یا *ایس ایم ایس بھیجا*، اور کال کی ہو تو اس کا نتیجہ)، ٹیگ لگائیں، اگر کہا ہو تو اگلی کال کی تاریخ اور مختصر نوٹ لکھیں، پھر **محفوظ کریں**۔
+   * نام سے پہلے لکھا نمبر **ترجیح** ہے، اسے دبا کر مطلب دیکھیں۔ **1** = مرکزی سروے مکمل اور ویڈیو 3 منٹ یا زیادہ دیکھی۔ **2** = مرکزی سروے 80–99٪ اور ویڈیو 3 منٹ یا زیادہ دیکھی۔ **3** = مکمل، ویڈیو 3 منٹ سے کم دیکھی۔ **4** = 80–99٪، ویڈیو 3 منٹ سے کم دیکھی۔ پہلے 1، پھر 2، 3، 4 — لیکن رابطہ سب سے کریں۔ *More… → ترجیح 1* صرف وہی لوگ دکھاتا ہے۔
 4. "رابطہ نہ کریں" یا "مرکزی لنک دوبارہ نہ بھیجیں" کا مطلب یہی ہے — ان سے رابطہ نہ کریں۔
 5. آپ صرف اپنے شرکاء دیکھ سکتے ہیں۔ پاس فریز، فہرست کا اسکرین شاٹ یا نمبر کسی کو نہ دیں۔ فہرست روزانہ ریسرچ ٹیم اپ ڈیٹ کرتی ہے۔
 6. کسی کو بھی ڈھونڈنے کے لیے، مثلاً جو سروے مکمل کرنے کے بعد دوبارہ کال یا میسج کرے، سرچ باکس میں اس کا نام، آئی ڈی یا نمبر لکھیں۔ تلاش آپ کے تمام شرکاء میں ہوتی ہے، چاہے کوئی بھی ٹیب کھلا ہو۔ نمبر کسی بھی طرح لکھ سکتے ہیں (0345-… یا ‎+92 345 …)۔

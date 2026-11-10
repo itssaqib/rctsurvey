@@ -345,6 +345,24 @@ def main():
     # ---------------- main survey (recorded + in progress)
     main = {}
     timers = [c for c in cat["main"].columns if str(c).startswith("timer_Page Submit")]
+    # one timer per video page, in the order of the survey's 30 video blocks (config "video_seconds", read from
+    # the .qsf and the mp4 files). Watched enough = time on the video page at least watch_high_seconds (3 min),
+    # or watch_high_share (90%) of a shorter video. A rule in minutes, not a share of the video: the share
+    # depends on video length, which differs by messenger (citizen 2-3.5 min, scholars 6-9 min).
+    vid_len = [v["seconds"] for v in CFG.get("video_seconds", [])]
+    hi_sec, hi_share = CFG.get("watch_high_seconds", 180), CFG.get("watch_high_share", 0.9)
+
+    def watch_of(r):
+        """(share of the video's length spent on its page, watched enough) for the video this response saw"""
+        for c in timers:
+            k = int(str(c).rsplit(".", 1)[1]) if "." in str(c) else 0
+            try:
+                sec, length = float(val(r, c)), vid_len[k]
+                return sec / length, sec >= min(hi_sec, hi_share * length)
+            except (TypeError, ValueError, IndexError, ZeroDivisionError):
+                continue
+        return None, False
+
     for _, r in cat["main"].iterrows():
         phones = [clean_phone(val(r, c)) for c in ("mobile", "ExternalReference", "mobile.1")]
         prof = dict(name=tidy(val(r, "name")), gender=eng(val(r, "gender")), age=val(r, "age") or "",
@@ -362,6 +380,7 @@ def main():
         rec = dict(status=st, progress=int(float(val(r, "Progress") or 0)), start=to_dt(val(r, "StartDate")),
                    end=to_dt(val(r, "EndDate")) if finished else pd.NaT,
                    video=any(val(r, c) for c in timers), consent=consent)
+        rec["watch"], rec["watch_high"] = watch_of(r)
         main.setdefault(i, []).append(rec)
         if i not in reg_profile and prof["name"]:
             reg_profile.setdefault(i, prof)
@@ -466,7 +485,7 @@ def main():
               "target": CFG.get("target_per_enumerator", 300),
               "fu2_day": CFG["fu2_day"], "fu4_day": CFG["fu4_day"], "late_days": CFG.get("late_days", 3),
               "pay_fu2": CFG.get("pay_fu2", 200), "pay_fu4": CFG.get("pay_fu4", 150)}
-    hidden_admin = ("age", "under_18", "gender", "video_seen", "n_video_attempts")
+    hidden_admin = ("age", "under_18", "gender", "video_seen", "n_video_attempts", "watch_pct")
     target = lambda e: round(public["target"] / sum(slot(x) == slot(e) for x in ENUS))   # a split pair shares one
     for e in ENUS:
         # an enumerator sees only the calls of their own login (or its split pair) and payments: a second ID
@@ -515,7 +534,10 @@ def main():
              + (", ".join(f"{pid_of[j]} -> {pid_of[i]}" for j, i in same.items()) or "none") + "   numbers " + (", ".join(extra_numbers) or "none"),
              f"Follow-ups from numbers not in the study (see ADMIN): {len(unmatched)}", "",
              f"Full compliance: {int((df.compliance == 'full').sum())}   Partial compliance (video, not finished): "
-             f"{int((df.compliance == 'partial').sum())}", "",
+             f"{int((df.compliance == 'partial').sum())}",
+             f"Follow-up priority (high watch = {CFG.get('watch_high_seconds', 180)} s on the video page, or "
+             f"{round(CFG.get('watch_high_share', 0.9) * 100)}% of a shorter video): "
+             + "   ".join(f"{k} = {int((df.priority == k).sum())}" for k in (1, 2, 3, 4)), "",
              "Per enumerator: people / full / partial / 2-wk done / 4-wk done / call today"]
     for e in ENUS:
         d = df[df.enumerator == e]
@@ -624,6 +646,13 @@ def build_person(i, s, mains, fu2, fu4, logs, number=None, reopen=""):
         vids = [m["start"] for m in mains if m["video"] and not pd.isna(m["start"])]
         main_done = max(vids) if vids else last_start
         main_status = "partial"
+    # ---- follow-up priority (team decision, 10 Nov): high watch = at least 3 min on the video page (or 90% of
+    # a shorter video), in any attempt (see watch_of)
+    #   1 = finished main + high watch   2 = partial (80-99%) + high watch
+    #   3 = finished main + low watch    4 = partial + low watch          (no video: no priority)
+    watch = max((m["watch"] for m in (mains or []) if m.get("watch") is not None), default=None)
+    high = any(m.get("watch_high") for m in (mains or []))
+    priority = ({"full": 1, "partial": 2} if high else {"full": 3, "partial": 4}).get(compliance)
 
     # ---- follow-up windows
     # status: not_eligible | not_yet | due | overdue | in_progress (open session) | stopped (closed, unfinished)
@@ -725,7 +754,8 @@ def build_person(i, s, mains, fu2, fu4, logs, number=None, reopen=""):
         "source": s.source, "first_seen": str(s.first_seen)[:10],
         "main_status": main_status, "main_progress": progress, "main_done": fmt(main_done),
         "main_last_start": fmt(last_start), "video_seen": bool(video_seen), "n_video_attempts": n_video, "n_completed": n_completed,
-        "compliance": compliance, "followup_from": fmt(main_done),
+        "compliance": compliance, "followup_from": fmt(main_done), "priority": priority,
+        "watch_pct": None if watch is None else round(watch * 100),
         "fu2_status": fu2_status, "fu2_due": fu2_due, "fu4_status": fu4_status, "fu4_due": fu4_due,
         "fu2_date": fmt(fu2["date"]) if fu2 and fu2["done"] else "", "fu4_date": fmt(fu4["date"]) if fu4 and fu4["done"] else "",
         "fu2_progress": fu2["progress"] if fu2 else 0, "fu4_progress": fu4["progress"] if fu4 else 0,

@@ -89,6 +89,33 @@ completion, or from the day the video was watched for partial compliance):
 | Done | completed — or every question answered, payment details included (progress ≥ 97%), with Submit never pressed | — (payment becomes due) |
 | Missed | 2-week never done and the 4-week window has opened | 4-week survey takes over |
 
+**Follow-up priority 1–4 (team decision, 10 Nov).** Each person with full or partial compliance has a number
+in front of their name. "High watch" means at least `watch_high_seconds` (3 minutes) on the video page, in any
+attempt; for a video shorter than that, `watch_high_share` (90%) of its length is enough. The time comes from
+the Qualtrics timer of the video page.
+
+The rule is in minutes, not "half of the video", because video length differs by messenger (citizen 2–3.5 min,
+scholars 6–9 min). On the 10 Nov data, the half-video rule gave 30% high watch for citizen videos and 13% for
+Sunni-scholar videos. The 3-minute rule gives 16–26% across messengers and 19–21% across messages, about 20%
+of viewers overall.
+
+| Priority | Main survey | Video |
+|---|---|---|
+| 1 | finished (100%) | high watch |
+| 2 | partial (80–99%, saw the video) | high watch |
+| 3 | finished (100%) | watched less |
+| 4 | partial | watched less |
+
+Within each kind of task the list shows priority 1 first. *More… → Priority 1–4* lists one group, and
+tapping the number explains it. Enumerators see only the number; ADMIN also sees the watched share.
+
+The video lengths are in `config.json` → `video_seconds`, in the order of the survey's 30 video blocks. That
+order was read from the survey's `.qsf` and the lengths from the mp4 files in `../videos`. If videos change,
+update both.
+
+Watch time is measured after the video was shown, so it is post-treatment. People with priority 3–4 are still
+in the follow-up sample and must still be contacted; the priority only sets the order.
+
 **Late (red tag).** A follow-up that is still open more than `late_days` (3) days after its due
 date gets a red "N days late" tag, a red border and its due date in bold red; the Follow-ups tab
 shows the number in red, and *More… → Follow-up late* lists them.

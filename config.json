@@ -48,5 +48,129 @@
     "ENU08B": "ENU08",
     "ENU09B": "ENU09",
     "ENU10B": "ENU10"
-  }
+  },
+  "watch_high_seconds": 180,
+  "watch_high_share": 0.9,
+  "video_seconds": [
+    {
+      "block": "male_sunni_scientific",
+      "seconds": 458.8
+    },
+    {
+      "block": "male_sunni_placebo",
+      "seconds": 404.6
+    },
+    {
+      "block": "male_shia_religious",
+      "seconds": 353.0
+    },
+    {
+      "block": "male_shia_scientific",
+      "seconds": 457.1
+    },
+    {
+      "block": "male_shia_placebo",
+      "seconds": 556.4
+    },
+    {
+      "block": "male_non_sect_religious",
+      "seconds": 536.1
+    },
+    {
+      "block": "male_non_sect_scientific",
+      "seconds": 356.3
+    },
+    {
+      "block": "male_non_sect_placebo",
+      "seconds": 338.7
+    },
+    {
+      "block": "male_sunni_religious",
+      "seconds": 427.9
+    },
+    {
+      "block": "male_professor_religious",
+      "seconds": 234.2
+    },
+    {
+      "block": "male_professor_scientific",
+      "seconds": 294.3
+    },
+    {
+      "block": "male_professor_placebo",
+      "seconds": 286.4
+    },
+    {
+      "block": "male_citizen_religious",
+      "seconds": 383.6
+    },
+    {
+      "block": "male_citizen_scientific",
+      "seconds": 405.8
+    },
+    {
+      "block": "male_citizen_placebo",
+      "seconds": 348.3
+    },
+    {
+      "block": "female_sunni_religious",
+      "seconds": 387.9
+    },
+    {
+      "block": "female_sunni_scientific",
+      "seconds": 477.7
+    },
+    {
+      "block": "female_sunni_placebo",
+      "seconds": 459.1
+    },
+    {
+      "block": "female_shia_religious",
+      "seconds": 458.5
+    },
+    {
+      "block": "female_shia_scientific",
+      "seconds": 459.1
+    },
+    {
+      "block": "female_shia_placebo",
+      "seconds": 303.3
+    },
+    {
+      "block": "female_non_sect_religious",
+      "seconds": 469.2
+    },
+    {
+      "block": "female_non_sect_scientific",
+      "seconds": 348.0
+    },
+    {
+      "block": "female_non_sect_placebo",
+      "seconds": 469.1
+    },
+    {
+      "block": "female_professor_religious",
+      "seconds": 263.0
+    },
+    {
+      "block": "female_professor_scientific",
+      "seconds": 260.8
+    },
+    {
+      "block": "female_professor_placebo",
+      "seconds": 315.8
+    },
+    {
+      "block": "female_citizen_religious",
+      "seconds": 140.8
+    },
+    {
+      "block": "female_citizen_scientific",
+      "seconds": 182.1
+    },
+    {
+      "block": "female_citizen_placebo",
+      "seconds": 209.4
+    }
+  ]
 }

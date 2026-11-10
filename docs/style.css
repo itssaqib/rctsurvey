@@ -121,6 +121,14 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); out
 .card.late { border-inline-start: 4px solid var(--bad); }       /* follow-up due more than 3 days ago */
 .row1 { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .nm { font-weight: 700; font-size: 16px; }
+/* follow-up priority 1-4 in front of the name (1 = first) */
+.prio { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 5px;
+  margin-inline-end: 6px; border: 0; border-radius: 6px; font: inherit; font-size: 13px; font-weight: 800; line-height: 1;
+  vertical-align: 1px; cursor: pointer; }
+.prio.p1 { background: var(--ok); color: var(--card); }
+.prio.p2 { background: var(--info); color: var(--card); }
+.prio.p3 { background: var(--warn-soft); color: var(--warn); }
+.prio.p4 { background: var(--gray-soft); color: var(--ink-2); }
 .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 .badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 10px 0 8px; }
 .b { font-size: 12px; font-weight: 600; border-radius: 6px; padding: 3px 8px; background: var(--gray-soft); color: var(--ink-2); }

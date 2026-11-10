@@ -52,6 +52,10 @@ const T = {
     checks: "Checks", unmatched: "Follow-ups from numbers not in the study",
     lateTag: "{n} days late", late: "late", payHold: "On hold", newNumber: "New number",
     inPair: "In {code}'s list", logInPair: "Log it in {code}",
+    prio1: "Priority 1: main survey 100% + watched the video 3 minutes or more (or nearly all of a shorter one)",
+    prio2: "Priority 2: main survey 80–99% + watched the video 3 minutes or more (or nearly all of a shorter one)",
+    prio3: "Priority 3: main survey 100%, watched the video less than that",
+    prio4: "Priority 4: main survey 80–99%, watched the video less than that", watched: "watched",
   },
   ur: {
     title: "فیلڈ ورک ٹریکر", subtitle: "سنی–شیعہ تحقیق · شرکاء سے رابطہ", code: "آپ کا کوڈ",
@@ -81,6 +85,10 @@ const T = {
     checks: "جانچ", unmatched: "ایسے نمبروں سے فالو اپ جو تحقیق میں نہیں",
     lateTag: "{n} دن کی تاخیر", late: "تاخیر", payHold: "روکی گئی", newNumber: "نیا نمبر",
     inPair: "{code} کی فہرست میں", logInPair: "{code} میں درج کریں",
+    prio1: "ترجیح 1: مرکزی سروے 100٪ + ویڈیو 3 منٹ یا زیادہ دیکھی (یا چھوٹی ویڈیو تقریباً پوری)",
+    prio2: "ترجیح 2: مرکزی سروے 80–99٪ + ویڈیو 3 منٹ یا زیادہ دیکھی (یا چھوٹی ویڈیو تقریباً پوری)",
+    prio3: "ترجیح 3: مرکزی سروے 100٪، ویڈیو اس سے کم دیکھی",
+    prio4: "ترجیح 4: مرکزی سروے 80–99٪، ویڈیو اس سے کم دیکھی", watched: "دیکھی",
   },
 };
 const STATUS = {
@@ -212,6 +220,7 @@ const MORE = [
   ["paid", payPaid, "Paid", "ادائیگی ہو گئی"],
   ["payhold", payHold, "Payment on hold", "ادائیگی روکی گئی"],
   ["dnc", (p) => p.action === "do_not_contact", "Do not contact", "رابطہ نہ کریں"],
+  ...[1, 2, 3, 4].map((k) => [`prio${k}`, (p) => p.priority === k, `Priority ${k}`, `ترجیح ${k}`]),
 ];
 const PAY_TABS = [         /* "All due" first: 2-week and 4-week payments in one list (and one CSV) */
   ["paydue", payDue, "All due", "تمام باقی"],
@@ -613,7 +622,8 @@ function filtered() {
     .filter((p) => !tag || (p.tags || []).includes(tag) || pending().some((l) => l.participant_id === p.pid && (l.tags || "").includes(tag)));
   return ps.sort(isPay()
       ? (a, b) => payOrder(a).localeCompare(payOrder(b)) || a.pid.localeCompare(b.pid)
-      : (a, b) => (rank[a.action] ?? 9) - (rank[b.action] ?? 9) || String(a.fu4_due || a.fu2_due).localeCompare(String(b.fu4_due || b.fu2_due)) || a.pid.localeCompare(b.pid));
+      : (a, b) => (rank[a.action] ?? 9) - (rank[b.action] ?? 9) || (a.priority || 9) - (b.priority || 9)   // priority 1 first
+        || String(a.fu4_due || a.fu2_due).localeCompare(String(b.fu4_due || b.fu2_due)) || a.pid.localeCompare(b.pid));
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const tone = (s) => ({ completed: "ok", done: "ok", paid: "ok", in_progress: "info", partial: "info", due: "warn",
@@ -666,6 +676,7 @@ function renderList() {
   $("#moreBtn").hidden = all.length <= shown;
   $("#list").innerHTML = items.map((p) => (isPay() ? payCard(p) : personCard(p))).join("");
   $("#list").querySelectorAll("[data-log]").forEach((b) => b.onclick = () => openLog(b.dataset.log));
+  $("#list").querySelectorAll("[data-prio]").forEach((b) => b.onclick = () => toast(b.dataset.prio));
   $("#list").querySelectorAll("[data-pay]").forEach((b) => b.onclick = () => openPay(...b.dataset.pay.split("|")));
 }
 function histList(logs) {
@@ -685,6 +696,12 @@ function fuBadge(p, w, label) {
   else if (["due", "overdue", "not_yet"].includes(st)) extra = ` · ${due}`;
   return badge(label, st, extra);
 }
+/* follow-up priority 1-4 in front of the name; tap it to see what it means (ADMIN also sees the watch share) */
+function prioBadge(p) {
+  if (!p.priority) return "";
+  const tip = t(`prio${p.priority}`) + (isAdmin() && p.watch_pct != null ? ` · ${t("watched")} ${p.watch_pct}%` : "");
+  return `<button type="button" class="prio p${p.priority}" data-prio="${esc(tip)}" title="${esc(tip)}">${p.priority}</button>`;
+}
 function personCard(p) {
   const logs = logsFor(p);
   const prog = ["in_progress", "stopped", "partial"].includes(p.main_status) ? ` · ${p.main_progress}%` : "";
@@ -697,7 +714,7 @@ function personCard(p) {
   const newNo = p.old_phone ? ` <span class="b info" title="${esc(p.old_phone)}">${t("newNumber")}</span>` : "";
   const pairB = p.pair_login ? `<span class="b info strong">${esc(t("inPair").replace("{code}", p.enumerator))}</span>` : "";
   return `<article class="card ${p.call_today && !contactedToday(p) ? "today" : ""} ${lw ? "late" : ""}">
-    <div class="row1"><span class="nm">${esc(p.name) || "—"}</span>
+    <div class="row1"><span class="nm">${prioBadge(p)}${esc(p.name) || "—"}</span>
       <span class="meta">${p.pid} · ${p.phone}${newNo}${isAdmin() ? " · " + p.enumerator : ""}</span></div>
     <div class="badges">${pairB}${lateB}${comp}${mainB}${fuBadge(p, "fu2", t("w2"))}${fuBadge(p, "fu4", t("w4"))}
       ${payBadge(t("pay2"), p.pay2)}${payBadge(t("pay4"), p.pay4)}
@@ -795,7 +812,7 @@ function download(name, rows) {
 }
 function exportCsv() {
   const cols = ["pid", "enumerator", "name", "phone", "district", "province", "main_status", "main_progress", "main_done",
-    "compliance", "fu2_status", "fu2_progress", "fu2_due", "fu4_status", "fu4_progress", "fu4_due", "action", "next_call", "n_calls"];
+    "compliance", "priority", "fu2_status", "fu2_progress", "fu2_due", "fu4_status", "fu4_progress", "fu4_due", "action", "next_call", "n_calls"];
   download(`${D.code}_list_${today()}.csv`, [[...cols, "pay_2week", "pay_4week"],
     ...filtered().map((p) => [...cols.map((c) => p[c]), (p.pay2 || {}).status, (p.pay4 || {}).status])]);
 }
