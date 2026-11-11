@@ -122,6 +122,13 @@ in the follow-up sample and must still be contacted; the priority only sets the 
 date gets a red "N days late" tag, a red border and its due date in bold red; the Follow-ups tab
 shows the number in red, and *More… → Follow-up late* lists them.
 
+**Finished (team decision, 10 Nov).** Once the 4-week survey is done (whether the 2-week was done or missed),
+nothing is left to do. In an enumerator's login these people leave every other list and filter (*To do today*,
+*Follow-ups*, *All*, *Priority 1–4* …). They appear only in the **✓ Finished** tab, in *Contacted today*, in the
+payment filters (*Payment pending*, *Paid*, *Payment on hold*) and in search. Their card shows no priority
+number, and they still count in the progress bars. ADMIN and PAY see them in every list as before. ADMIN also
+has the Finished tab, which replaced *More… → 4-week done*.
+
 **Search.** The search box (name, ID, or any of the person's numbers: contact, old, other or payment
 number) looks through all of the login's people, whatever tab or tag is selected, so someone whose
 follow-ups are done is still found when they call or message again. Numbers can be typed in any form

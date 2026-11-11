@@ -120,6 +120,20 @@ def to_dt(v):
         return pd.NaT
 
 
+MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October",
+          "November", "December"]
+
+
+def export_time(path):
+    """When a Qualtrics export was made, from its name ("..._November 11, 2026_09.44.xlsx"), else the file time.
+    Files are read oldest first so the newest copy of a response wins. (Sorting by name put "November 10" and
+    "November 11" before "November 9", so a 2-day-old copy of an in-progress response won; fixed 11 Nov.)"""
+    m = re.search(r"(%s) (\d{1,2}), (\d{4})_(\d{1,2})\.(\d{2})" % "|".join(MONTHS), os.path.basename(path))
+    if m:
+        return datetime(int(m[3]), MONTHS.index(m[1]) + 1, int(m[2]), int(m[4]), int(m[5])).timestamp()
+    return os.path.getmtime(path)
+
+
 def read_export(path):
     """Qualtrics export -> data rows. CSV has 3 header rows, xlsx 2 (row 2 = question text)."""
     if path.lower().endswith(".csv"):
@@ -298,8 +312,9 @@ def main():
     same, extra_numbers = apply_same_person(state, known)
     reopen = load_contact_again()
 
-    files = sorted(f for f in glob.glob(P("inputs", "*.xlsx")) + glob.glob(P("inputs", "*.csv"))
-                   if not os.path.basename(f).startswith("~$"))      # Excel lock file of an open export
+    files = sorted((f for f in glob.glob(P("inputs", "*.xlsx")) + glob.glob(P("inputs", "*.csv"))
+                    if not os.path.basename(f).startswith("~$")),     # Excel lock file of an open export
+                   key=export_time)                                   # oldest first: the newest copy wins
     data = {"reg": [], "main": [], "fu2": [], "fu4": []}
     for f in files:
         if os.path.basename(f).lower().startswith("call_log"):

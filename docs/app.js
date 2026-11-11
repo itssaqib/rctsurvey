@@ -190,6 +190,10 @@ const SMS = {
   thanks: "Assalam o Alaikum {name}! Hamare tamam survey mukammal karne ka bohat shukriya. Aap ki raqam JazzCash ya EasyPaisa se bheji ja rahi hai.",
 };
 const FU_ACTIVE = ["due", "overdue", "in_progress", "stopped"];
+/* finished: the 4-week survey is done (2-week done or missed), so nothing is left to do (team decision, 10 Nov).
+   Enumerators see them only in the "Finished" tab, "Contacted today", the payment filters and search;
+   ADMIN and PAY see them in every list. */
+const finished = (p) => p.fu4_status === "done";
 const daysSince = (d) => (d ? Math.round((Date.parse(today()) - Date.parse(d)) / 864e5) : -1);
 /* red tag: the open follow-up whose due date passed more than late_days (3) days ago */
 const lateWave = (p) => (p.action === "do_not_contact" ? "" :
@@ -208,6 +212,7 @@ const TABS = [
   ["unfinished", (p) => ["in_progress", "stopped"].includes(p.main_status) || (p.compliance === "partial" && ["main_remind", "wait_main"].includes(p.action)), "Main not finished", "مرکزی نامکمل"],
   ["not_started", (p) => p.main_status === "not_started", "Not started", "شروع نہیں کیا"],
   ["contacted", contactedToday, "Contacted today", "آج رابطہ ہوا"],
+  ["finished", finished, "✓ Finished", "✓ فالو اپ مکمل"],
 ];
 const MORE = [
   ["all", () => true, "All", "سب"],
@@ -215,7 +220,6 @@ const MORE = [
   ["full", (p) => p.compliance === "full", "Full compliance", "مکمل شرکت"],
   ["partial", (p) => p.compliance === "partial", "Partial compliance", "جزوی شرکت"],
   ["fu2done", (p) => p.fu2_status === "done", "2-week done", "2 ہفتے مکمل"],
-  ["fu4done", (p) => p.fu4_status === "done", "4-week done", "4 ہفتے مکمل"],
   ["paydue", payDue, "Payment pending", "ادائیگی باقی"],
   ["paid", payPaid, "Paid", "ادائیگی ہو گئی"],
   ["payhold", payHold, "Payment on hold", "ادائیگی روکی گئی"],
@@ -229,6 +233,9 @@ const PAY_TABS = [         /* "All due" first: 2-week and 4-week payments in one
   ["paid", payPaid, "Paid", "ادا ہو گئی"],
   ["all", () => true, "All", "سب"],
 ];
+/* an enumerator's lists leave out finished people, except these */
+const SHOW_FINISHED = ["finished", "contacted", "paydue", "paid", "payhold"];
+const inList = (k, f) => (isAdmin() || isPay() || SHOW_FINISHED.includes(k) ? f : (p) => f(p) && !finished(p));
 
 /* ---------------------------------------------------------------- state */
 let lang = store.get("ss_lang") || "en";
@@ -584,7 +591,7 @@ function renderTabs() {
   const list = isPay() ? PAY_TABS : TABS;
   const nLate = isPay() ? 0 : ps.filter(lateWave).length;
   $("#chips").innerHTML = list.map(([k, f, en, ur]) =>
-    `<button class="tab ${filter === k ? "on" : ""}" role="tab" data-k="${k}">${lang === "ur" ? ur : en}<span class="k">${ps.filter(f).length}</span>${k === "followup" && nLate ? `<span class="k late" title="${t("late")}">⚠ ${nLate}</span>` : ""}</button>`).join("");
+    `<button class="tab ${filter === k ? "on" : ""}" role="tab" data-k="${k}">${lang === "ur" ? ur : en}<span class="k">${ps.filter(inList(k, f)).length}</span>${k === "followup" && nLate ? `<span class="k late" title="${t("late")}">⚠ ${nLate}</span>` : ""}</button>`).join("");
   $("#chips").classList.toggle("searching", !!$("#search").value.trim());     // no tab looks picked while searching
   $("#chips").querySelectorAll(".tab").forEach((b) => b.onclick = () => { pick(b.dataset.k); $("#moreSel").value = ""; render(); });
   const ms = $("#moreSel");
@@ -613,12 +620,12 @@ function matches(p, q) {
 }
 function filtered() {
   const list = isPay() ? PAY_TABS : [...TABS, ...MORE];
-  const f = (list.find((x) => x[0] === filter) || list[0])[1];
+  const [k, f] = list.find((x) => x[0] === filter) || list[0];
   const q = $("#search").value.trim();
   const tag = isPay() ? "" : $("#tagSel").value;
   const rank = { fu4: 0, fu2: 1, check_number: 1, main_remind: 2, main_restart: 2, main_invite: 3 };
   // search also looks in the other login of a split pair (someone who wrote to the other WhatsApp number)
-  const ps = q ? [...base(), ...(D.pair_people || [])].filter((p) => matches(p, q)) : base().filter(f)
+  const ps = q ? [...base(), ...(D.pair_people || [])].filter((p) => matches(p, q)) : base().filter(inList(k, f))
     .filter((p) => !tag || (p.tags || []).includes(tag) || pending().some((l) => l.participant_id === p.pid && (l.tags || "").includes(tag)));
   return ps.sort(isPay()
       ? (a, b) => payOrder(a).localeCompare(payOrder(b)) || a.pid.localeCompare(b.pid)
@@ -696,9 +703,10 @@ function fuBadge(p, w, label) {
   else if (["due", "overdue", "not_yet"].includes(st)) extra = ` · ${due}`;
   return badge(label, st, extra);
 }
-/* follow-up priority 1-4 in front of the name; tap it to see what it means (ADMIN also sees the watch share) */
+/* follow-up priority 1-4 in front of the name; tap it to see what it means (ADMIN also sees the watch share).
+   Enumerators see no number on finished people: nothing is left to prioritise. */
 function prioBadge(p) {
-  if (!p.priority) return "";
+  if (!p.priority || (!isAdmin() && finished(p))) return "";
   const tip = t(`prio${p.priority}`) + (isAdmin() && p.watch_pct != null ? ` · ${t("watched")} ${p.watch_pct}%` : "");
   return `<button type="button" class="prio p${p.priority}" data-prio="${esc(tip)}" title="${esc(tip)}">${p.priority}</button>`;
 }
