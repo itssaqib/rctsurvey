@@ -6,3 +6,6 @@ secrets/
 __pycache__/
 *.xlsx
 *.csv
+# contact files (names + numbers) made for enumerators' phones
+contacts/
+*.vcf
