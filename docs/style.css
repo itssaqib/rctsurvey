@@ -3,6 +3,7 @@
   --brand: #0f766e; --brand-ink: #ffffff; --brand-soft: #e3f3f1;
   --ok: #157f3c; --ok-soft: #e6f5ec; --warn: #a45a06; --warn-soft: #fdf1df;
   --bad: #b42318; --bad-soft: #fdeceb; --info: #1f4fd1; --info-soft: #e9efff; --gray-soft: #eef0f3;
+  --hot: #c2410c;                                        /* high priority (orange, apart from the red "late") */
   --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a;          /* chart series: main, 2-week, 4-week */
   --track: #e9ecf1; --grid: #eceef2;
   --shadow: 0 1px 2px rgba(16,24,40,.05);
@@ -14,6 +15,7 @@
     --brand: #2dd4bf; --brand-ink: #062b27; --brand-soft: #12302d;
     --ok: #4ade80; --ok-soft: #13301f; --warn: #fbbf24; --warn-soft: #33290f;
     --bad: #f87171; --bad-soft: #3a1717; --info: #93b4ff; --info-soft: #182644; --gray-soft: #202935;
+    --hot: #fb923c;
     --s1: #3987e5; --s2: #d95926; --s3: #199e70; --track: #232c38; --grid: #222b36; --shadow: none;
   }
 }
@@ -22,6 +24,7 @@
   --brand: #2dd4bf; --brand-ink: #062b27; --brand-soft: #12302d;
   --ok: #4ade80; --ok-soft: #13301f; --warn: #fbbf24; --warn-soft: #33290f;
   --bad: #f87171; --bad-soft: #3a1717; --info: #93b4ff; --info-soft: #182644; --gray-soft: #202935;
+  --hot: #fb923c;
   --s1: #3987e5; --s2: #d95926; --s3: #199e70; --track: #232c38; --grid: #222b36; --shadow: none;
 }
 * { box-sizing: border-box; }
@@ -119,6 +122,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); out
   box-shadow: var(--shadow); }
 .card.today { border-inline-start: 4px solid var(--brand); }
 .card.late { border-inline-start: 4px solid var(--bad); }       /* follow-up due more than 3 days ago */
+.card.hot { border-inline-start: 6px solid var(--hot); }        /* high priority (wins over late) */
 .row1 { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .nm { font-weight: 700; font-size: 16px; }
 /* follow-up priority 1-4 in front of the name (1 = first) */
@@ -136,6 +140,7 @@ input:focus, select:focus, textarea:focus { outline: 2px solid var(--brand); out
 .b.bad { background: var(--bad-soft); color: var(--bad); } .b.info { background: var(--info-soft); color: var(--info); }
 .b.strong { font-weight: 700; }
 .b.late { background: var(--bad); color: var(--card); font-weight: 700; }
+.b.hot { background: var(--hot); color: var(--card); font-weight: 700; }
 .late-date { color: var(--bad); font-weight: 800; }
 .b.bad .late-date { color: inherit; }
 .late-txt { color: var(--bad); font-weight: 700; }

@@ -552,13 +552,16 @@ def main():
              f"{int((df.compliance == 'partial').sum())}",
              f"Follow-up priority (high watch = {CFG.get('watch_high_seconds', 180)} s on the video page, or "
              f"{round(CFG.get('watch_high_share', 0.9) * 100)}% of a shorter video): "
-             + "   ".join(f"{k} = {int((df.priority == k).sum())}" for k in (1, 2, 3, 4)), "",
-             "Per enumerator: people / full / partial / 2-wk done / 4-wk done / call today"]
+             + "   ".join(f"{k} = {int((df.priority == k).sum())}" for k in (1, 2, 3, 4)),
+             f"High priority: {int((df.hp != '').sum())}   (2-week closes within {CFG.get('hp_days', 3)} days: "
+             f"{int((df.hp == 'fu2_closing').sum())}; 2-week missed, 4-week open, has answered or not yet contacted: "
+             f"{int((df.hp == 'fu2_missed').sum())})", "",
+             "Per enumerator: people / full / partial / 2-wk done / 4-wk done / call today / high priority"]
     for e in ENUS:
         d = df[df.enumerator == e]
         lines.append(f"  {e}: {len(d):5d} / {int((d.compliance == 'full').sum()):4d} / {int((d.compliance == 'partial').sum()):4d}"
                      f" / {int((d.fu2_status == 'done').sum()):4d} / {int((d.fu4_status == 'done').sum()):4d}"
-                     f" / {int(d.call_today.sum()):4d}")
+                     f" / {int(d.call_today.sum()):4d} / {int((d.hp != '').sum()):4d}")
     open(P("state", "last_run.txt"), "w", encoding="utf-8").write("\n".join(lines))
     print("\n".join(lines))
     print("\nNext: commit and push the docs/ folder (see README.md).")
@@ -761,6 +764,22 @@ def build_person(i, s, mains, fu2, fu4, logs, number=None, reopen=""):
     called_today = bool(last and last.get("day", str(last.get("time", ""))[:10]) == TODAY.isoformat())
     # (on hold: the follow-up was answered from this number, so an earlier "wrong number" does not apply)
     call_today = (actionable and (not wrong or hold) and not called_today and (not next_call or next_call <= TODAY.isoformat()))
+    # ---- high priority (team decision, 14 Nov): the people enumerators should focus on first
+    #   fu2_closing: the 2-week survey is still open and turns "missed" within hp_days (3) days
+    #   fu2_missed:  the 2-week was missed and the 4-week is open, unless the person was contacted for a
+    #                follow-up but never answered (answered = picked up, asked to call back, replied on WhatsApp,
+    #                or opened a follow-up survey); people never contacted for a follow-up are included
+    fu_open = ("due", "overdue", "in_progress", "stopped")
+    fu_calls = [l for l in last_call if l.get("action") in ("fu2", "fu4")]
+    answered = bool(fu2 or fu4) or any({"reached", "reached_done", "call_back", "whatsapp_reply"} & set(parts(l))
+                                       for l in fu_calls)
+    days_left = (date.fromisoformat(fu4_due) - TODAY).days if fu4_due else None
+    hp = ""
+    if action != "do_not_contact":
+        if fu2_status in fu_open and days_left is not None and days_left <= CFG.get("hp_days", 3):
+            hp = "fu2_closing"
+        elif fu2_status == "missed" and fu4_status in fu_open and (answered or not fu_calls):
+            hp = "fu2_missed"
     # age is not used: under-18 participants are treated like everyone else (team decision, 27 Oct)
     return {
         "pid": s.participant_id, "enumerator": s.enumerator, "name": s["name"] or "",
@@ -775,7 +794,7 @@ def build_person(i, s, mains, fu2, fu4, logs, number=None, reopen=""):
         "fu2_date": fmt(fu2["date"]) if fu2 and fu2["done"] else "", "fu4_date": fmt(fu4["date"]) if fu4 and fu4["done"] else "",
         "fu2_progress": fu2["progress"] if fu2 else 0, "fu4_progress": fu4["progress"] if fu4 else 0,
         "pay2": pay2, "pay4": pay4,
-        "action": action, "link": link, "call_today": bool(call_today), "next_call": next_call,
+        "action": action, "link": link, "call_today": bool(call_today), "next_call": next_call, "hp": hp,
         "tags": tags, "calls": logs[-8:], "n_calls": len(last_call),
         "gender": s.gender or "",
     }

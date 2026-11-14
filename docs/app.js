@@ -51,6 +51,7 @@ const T = {
     byEnum: "Completions by enumerator", target: "Target", details: "Details per enumerator",
     checks: "Checks", unmatched: "Follow-ups from numbers not in the study",
     lateTag: "{n} days late", late: "late", payHold: "On hold", newNumber: "New number",
+    hpClosing: "High priority · 2-week: {n} day(s) left", hpMissed: "High priority · 2-week missed: get the 4-week done",
     inPair: "In {code}'s list", logInPair: "Log it in {code}",
     prio1: "Priority 1: main survey 100% + watched the video 3 minutes or more (or nearly all of a shorter one)",
     prio2: "Priority 2: main survey 80–99% + watched the video 3 minutes or more (or nearly all of a shorter one)",
@@ -84,6 +85,7 @@ const T = {
     byEnum: "انیومریٹر کے حساب سے", target: "ہدف", details: "ہر انیومریٹر کی تفصیل",
     checks: "جانچ", unmatched: "ایسے نمبروں سے فالو اپ جو تحقیق میں نہیں",
     lateTag: "{n} دن کی تاخیر", late: "تاخیر", payHold: "روکی گئی", newNumber: "نیا نمبر",
+    hpClosing: "اعلیٰ ترجیح · 2 ہفتے والا سروے: {n} دن باقی", hpMissed: "اعلیٰ ترجیح · 2 ہفتے والا رہ گیا: 4 ہفتے والا ضرور مکمل کروائیں",
     inPair: "{code} کی فہرست میں", logInPair: "{code} میں درج کریں",
     prio1: "ترجیح 1: مرکزی سروے 100٪ + ویڈیو 3 منٹ یا زیادہ دیکھی (یا چھوٹی ویڈیو تقریباً پوری)",
     prio2: "ترجیح 2: مرکزی سروے 80–99٪ + ویڈیو 3 منٹ یا زیادہ دیکھی (یا چھوٹی ویڈیو تقریباً پوری)",
@@ -208,6 +210,9 @@ const contactedToday = (p) => logsFor(p).some((l) => !String(l.outcome).startsWi
 /* main tabs (always visible) and the extra filters in the "More…" menu */
 const TABS = [
   ["today", (p) => p.call_today && !contactedToday(p), "To do today", "آج کا کام"],
+  /* high priority (team decision, 14 Nov; set by update.py): the 2-week closes within 3 days, or the 2-week was
+     missed and the person has answered before (or was never contacted), so the 4-week must not be missed too */
+  ["hp", (p) => !!p.hp, "🔥 High priority", "🔥 اعلیٰ ترجیح"],
   ["followup", (p) => FU_ACTIVE.includes(p.fu2_status) || FU_ACTIVE.includes(p.fu4_status), "Follow-ups", "فالو اپ"],
   ["unfinished", (p) => ["in_progress", "stopped"].includes(p.main_status) || (p.compliance === "partial" && ["main_remind", "wait_main"].includes(p.action)), "Main not finished", "مرکزی نامکمل"],
   ["not_started", (p) => p.main_status === "not_started", "Not started", "شروع نہیں کیا"],
@@ -551,7 +556,7 @@ function renderAdmin() {
     return `<tr><td>${e}</td><td>${ps.length}</td><td>${r[0].n} <span class="muted">+${r[0].extra}</span></td>
       <td>${r[1].n} <span class="muted">+${r[1].extra}</span></td><td>${r[2].n} <span class="muted">+${r[2].extra}</span></td>
       <td>${c((p) => FU_ACTIVE.includes(p.fu2_status) || FU_ACTIVE.includes(p.fu4_status))}${late ? ` <span class="late-txt">(${late} ${t("late")})</span>` : ""}</td>
-      <td>${c((p) => p.call_today)}</td><td>${pays("paid")} / ${pays("due")}</td>
+      <td>${c((p) => p.call_today)}</td><td>${c((p) => !!p.hp)}</td><td>${pays("paid")} / ${pays("due")}</td>
       <td>${ps.reduce((s, p) => s + (p.n_calls || 0), 0)}</td><td>${c(contactedToday)}</td></tr>`;
   }).join("");
   const um = D.unmatched || [];
@@ -569,7 +574,7 @@ function renderAdmin() {
       <div class="legend">${legend}<span><i class="sw" style="background:transparent;border-top:2px dashed var(--ink-2);height:0;width:14px;border-radius:0"></i>${t("target")} ${D.target || 320}</span></div>${ch.svg}</section>
     <details class="box"><summary>${t("details")}</summary><div class="admin-scroll"><table class="admin-table"><thead><tr>
       <th>Enumerator</th><th>People</th><th>Main (full +partial)</th><th>2-week</th><th>4-week</th><th>Follow-ups open</th>
-      <th>To do today</th><th>Payments paid / due</th><th>Calls</th><th>Contacted today</th></tr></thead><tbody>${rows}</tbody></table></div></details>
+      <th>To do today</th><th>High priority</th><th>Payments paid / due</th><th>Calls</th><th>Contacted today</th></tr></thead><tbody>${rows}</tbody></table></div></details>
     <details class="box"><summary>${t("checks")}</summary><div class="flags">${flags.map(([l, v]) => `<span class="b ${v ? "warn" : ""}">${l}: ${v}</span>`).join("")}</div>
       ${um.length ? `<ul class="small muted">${um.map((u) => `<li>${esc(u.wave)} · ${esc(u.date)} · typed: ${esc(u.phone_typed)} · ${esc(u.name)} · ${u.finished ? "finished" : "not finished"}</li>`).join("")}</ul>` : ""}
       ${holds.length ? `<p class="small"><b>Payment on hold:</b> ${holds.map((p) => `${p.pid} (${p.enumerator})`).join(", ")}</p>` : ""}
@@ -624,12 +629,15 @@ function filtered() {
   const q = $("#search").value.trim();
   const tag = isPay() ? "" : $("#tagSel").value;
   const rank = { fu4: 0, fu2: 1, check_number: 1, main_remind: 2, main_restart: 2, main_invite: 3 };
+  const hpRank = { fu2_closing: 0, fu2_missed: 1 };     // high priority first: the 2-week closing soonest on top
   // search also looks in the other login of a split pair (someone who wrote to the other WhatsApp number)
   const ps = q ? [...base(), ...(D.pair_people || [])].filter((p) => matches(p, q)) : base().filter(inList(k, f))
     .filter((p) => !tag || (p.tags || []).includes(tag) || pending().some((l) => l.participant_id === p.pid && (l.tags || "").includes(tag)));
   return ps.sort(isPay()
       ? (a, b) => payOrder(a).localeCompare(payOrder(b)) || a.pid.localeCompare(b.pid)
-      : (a, b) => (rank[a.action] ?? 9) - (rank[b.action] ?? 9) || (a.priority || 9) - (b.priority || 9)   // priority 1 first
+      : (a, b) => (hpRank[a.hp] ?? 9) - (hpRank[b.hp] ?? 9)
+        || (a.hp === "fu2_closing" && b.hp === "fu2_closing" ? String(a.fu4_due).localeCompare(String(b.fu4_due)) : 0)
+        || (rank[a.action] ?? 9) - (rank[b.action] ?? 9) || (a.priority || 9) - (b.priority || 9)   // priority 1 first
         || String(a.fu4_due || a.fu2_due).localeCompare(String(b.fu4_due || b.fu2_due)) || a.pid.localeCompare(b.pid));
 }
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -721,10 +729,12 @@ function personCard(p) {
   const lateB = lw ? `<span class="b late">⚠ ${t("lateTag").replace("{n}", daysSince(p[`${lw}_due`]))}</span>` : "";
   const newNo = p.old_phone ? ` <span class="b info" title="${esc(p.old_phone)}">${t("newNumber")}</span>` : "";
   const pairB = p.pair_login ? `<span class="b info strong">${esc(t("inPair").replace("{code}", p.enumerator))}</span>` : "";
-  return `<article class="card ${p.call_today && !contactedToday(p) ? "today" : ""} ${lw ? "late" : ""}">
+  const hpB = !p.hp ? "" : `<span class="b hot">🔥 ${esc(p.hp === "fu2_closing"
+    ? t("hpClosing").replace("{n}", Math.max(0, -daysSince(p.fu4_due))) : t("hpMissed"))}</span>`;
+  return `<article class="card ${p.call_today && !contactedToday(p) ? "today" : ""} ${lw ? "late" : ""} ${p.hp ? "hot" : ""}">
     <div class="row1"><span class="nm">${prioBadge(p)}${esc(p.name) || "—"}</span>
       <span class="meta">${p.pid} · ${p.phone}${newNo}${isAdmin() ? " · " + p.enumerator : ""}</span></div>
-    <div class="badges">${pairB}${lateB}${comp}${mainB}${fuBadge(p, "fu2", t("w2"))}${fuBadge(p, "fu4", t("w4"))}
+    <div class="badges">${hpB}${pairB}${lateB}${comp}${mainB}${fuBadge(p, "fu2", t("w2"))}${fuBadge(p, "fu4", t("w4"))}
       ${payBadge(t("pay2"), p.pay2)}${payBadge(t("pay4"), p.pay4)}
 </div>
     <div class="act">➜ <b>${ACTION[lang][p.action] || p.action}</b>${p.next_call ? ` · ${t("nextCallShort")}: ${p.next_call}` : ""}</div>

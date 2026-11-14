@@ -129,6 +129,15 @@ payment filters (*Payment pending*, *Paid*, *Payment on hold*) and in search. Th
 number, and they still count in the progress bars. ADMIN and PAY see them in every list as before. ADMIN also
 has the Finished tab, which replaced *More… → 4-week done*.
 
+**High priority (team decision, 14 Nov).** `update.py` sets `hp` on two groups, never on "do not contact":
+`fu2_closing` = the 2-week is still open and turns *missed* within `hp_days` (3, config) days;
+`fu2_missed` = the 2-week was missed and the 4-week is open, unless the person was contacted for a follow-up
+but never answered (answered = picked up, asked to call back, replied on WhatsApp, or opened a follow-up
+survey). People never contacted for a follow-up are included. These people get an orange "🔥 High priority"
+badge and border and sort to the top of every list, the 2-week closing soonest first. The **🔥 High priority**
+tab lists them, and the ADMIN table counts them per enumerator. Why: 27% of 2-week windows that had closed
+by 14 Nov were missed, and 69% of 2-week completions came within 3 days of the due date.
+
 **Search.** The search box (name, ID, or any of the person's numbers: contact, old, other or payment
 number) looks through all of the login's people, whatever tab or tag is selected, so someone whose
 follow-ups are done is still found when they call or message again. Numbers can be typed in any form
