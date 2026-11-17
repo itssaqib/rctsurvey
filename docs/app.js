@@ -566,6 +566,7 @@ function renderAdmin() {
     ["Declined consent / not interested", D.people.filter((p) => p.action === "do_not_contact").length],
     ["2-week missed", D.people.filter((p) => p.fu2_status === "missed").length],
     [t("unmatched"), um.length],
+    ["Follow-up filled before the main survey (ignored)", (D.fu_before_main || []).length],
     ["Payment on hold (follow-up done, no main survey)", D.people.filter(payHold).length],
     ["Duplicate registrations merged", (D.merged || []).length],
   ];
@@ -577,6 +578,7 @@ function renderAdmin() {
       <th>To do today</th><th>High priority</th><th>Payments paid / due</th><th>Calls</th><th>Contacted today</th></tr></thead><tbody>${rows}</tbody></table></div></details>
     <details class="box"><summary>${t("checks")}</summary><div class="flags">${flags.map(([l, v]) => `<span class="b ${v ? "warn" : ""}">${l}: ${v}</span>`).join("")}</div>
       ${um.length ? `<ul class="small muted">${um.map((u) => `<li>${esc(u.wave)} · ${esc(u.date)} · typed: ${esc(u.phone_typed)} · ${esc(u.name)} · ${u.finished ? "finished" : "not finished"}</li>`).join("")}</ul>` : ""}
+      ${(D.fu_before_main || []).length ? `<p class="small"><b>Follow-up before the main survey (ignored, not paid):</b> ${D.fu_before_main.map((x) => `${esc(x.pid)} (${esc(x.enumerator)}) · ${esc(x.wave)} · ${esc(x.date)}`).join(", ")}</p>` : ""}
       ${holds.length ? `<p class="small"><b>Payment on hold:</b> ${holds.map((p) => `${p.pid} (${p.enumerator})`).join(", ")}</p>` : ""}
       ${(D.merged || []).length ? `<p class="small"><b>Merged:</b> ${D.merged.map((m) => `${esc(m.pid)} → ${esc(m.into)}`).join(", ")}</p>` : ""}</details>`;
   const tip = $("#tip");

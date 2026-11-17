@@ -208,6 +208,10 @@ and a payment still due is shown above one already paid. The CSV of that tab has
 A follow-up completed by someone with no main survey (or no video) under that number is
 **on hold**: PAY does not see it, and the enumerator is asked to find out which number they used
 for the main survey (then add it as a number change, or tell the team).
+A follow-up that **started before the person's first main survey** (with a video) is not theirs: a forwarded
+link filled before they joined. It does not count for their status or payment, is left out of
+`state/response_links.csv`, and is listed in ADMIN → Checks (added 17 Nov, after one person's five early
+2-week responses made a payment due).
 
 **Analysis note (pre-analysis plan):** treated = reached the video page; follow-up
 outcomes are analysed for full + partial compliance; missing post-video items of

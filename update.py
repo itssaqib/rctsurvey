@@ -403,6 +403,15 @@ def main():
     # ---------------- follow-ups (2-week, 4-week)
     fu = {"fu2": {}, "fu4": {}}
     unmatched = []            # follow-ups from numbers not in the study: shown to ADMIN, never new people
+    # A follow-up that started before the person's first main-survey attempt with a video (or a completed one)
+    # cannot be their follow-up: a forwarded link filled before they joined (17 Nov: five 2-week responses from
+    # 28 Oct - 8 Nov, main survey on 16 Nov). Ignored for status, payment and response_links; shown to ADMIN.
+    early = []
+    entered = {}
+    for i, ms in main.items():
+        starts = [m["start"] for m in ms if (m["video"] or m["status"] == "completed") and not pd.isna(m["start"])]
+        if starts:
+            entered[i] = min(starts)
     for w in ("fu2", "fu4"):
         recs = {}
         for _, r in cat[w].iterrows():
@@ -416,6 +425,11 @@ def main():
                 if ph or finished:
                     unmatched.append({"wave": w, "phone_typed": val(r, "fu_mobile") or "", "name": tidy(val(r, "fu_name")),
                                       "date": str(val(r, "StartDate"))[:16], "finished": finished, "response_id": rid})
+                continue
+            start = to_dt(val(r, "StartDate"))
+            if i in entered and not pd.isna(start) and start < entered[i]:
+                early.append({"wave": w, "i": i, "date": str(val(r, "StartDate"))[:16], "finished": finished,
+                              "name": tidy(val(r, "fu_name")), "response_id": rid})
                 continue
             end = val(r, "EndDate") if finished else None
             links.append((w, rid, i, ph, finished, end or val(r, "StartDate")))
@@ -456,6 +470,7 @@ def main():
                 if old in d:
                     d[new] = d.pop(old)
         links = [(w, rid, remap.get(i, i), *rest) for w, rid, i, *rest in links]
+        early = [dict(x, i=remap.get(x["i"], x["i"])) for x in early]
     assert state.phone.is_unique and state.participant_id.is_unique
     # profile refresh from the latest registration / survey answers (never touches ID or enumerator)
     for i, prof in reg_profile.items():
@@ -516,6 +531,8 @@ def main():
         json.dump(encrypt(obj, sec[e]["passphrase"]), open(P("docs", "data", f"{e}.json.enc"), "w"))
     adm = dict(public, role="admin", code="ADMIN", log_token=sec["ADMIN"]["log_token"], people=people,
                enumerators=ENUS, split=SPLIT, targets={e: target(e) for e in ENUS}, unmatched=unmatched,
+               fu_before_main=[dict({k: v for k, v in x.items() if k != "i"}, pid=pid_of[x["i"]],
+                                    enumerator=state.at[x["i"], "enumerator"]) for x in early],
                merged=[{"pid": pid_of[j], "into": pid_of[i]} for j, i in {**merged, **same}.items()])
     # PAY login (payment firm): only people who completed a follow-up; payment details, no survey answers
     pay_keep = ("pid", "enumerator", "name", "phone", "district", "province", "compliance",
@@ -547,7 +564,9 @@ def main():
              + (", ".join(f"{pid_of[j]} -> {pid_of[i]}" for j, i in merged.items()) or "none"),
              "Same person (state/same_person.csv): IDs "
              + (", ".join(f"{pid_of[j]} -> {pid_of[i]}" for j, i in same.items()) or "none") + "   numbers " + (", ".join(extra_numbers) or "none"),
-             f"Follow-ups from numbers not in the study (see ADMIN): {len(unmatched)}", "",
+             f"Follow-ups from numbers not in the study (see ADMIN): {len(unmatched)}",
+             f"Follow-ups started before the person's main survey (ignored, see ADMIN): {len(early)}"
+             + (" - " + ", ".join(sorted({pid_of[x['i']] for x in early})) if early else ""), "",
              f"Full compliance: {int((df.compliance == 'full').sum())}   Partial compliance (video, not finished): "
              f"{int((df.compliance == 'partial').sum())}",
              f"Follow-up priority (high watch = {CFG.get('watch_high_seconds', 180)} s on the video page, or "
