@@ -47,7 +47,9 @@ A phone-friendly web page with three kinds of login:
 ## One-time setup
 
 1. **Passphrases.** `secrets/passphrases.json` has one passphrase per login
-   (ENU01–ENU10, PAY, ADMIN). Give each person **only their own**, privately.
+   (ENU01–ENU10 and their B logins, PAY, ADMIN). Give each person **only their own**, privately.
+   Since 18 Nov both logins of one enumerator (e.g. ENU03 and ENU03B) share one passphrase, set by
+   hand in that file; ADMIN and PAY keep their own.
 2. **Google Sheet** (needed for live calls and payments).
    1. New Google Sheet (your account) → Extensions → Apps Script.
    2. Replace the code with `apps_script/Code.gs` → Save.
@@ -235,5 +237,8 @@ If the push is rejected: `git pull --rebase`, then `git push` again.
   so phones load the new version instead of a cached copy.
 * New login or a leaked passphrase: delete that entry from `secrets/passphrases.json`,
   run `update.py` (it creates a new one), paste `TOKENS` into Apps Script again.
+* To choose a passphrase yourself: change only `"passphrase"` in `secrets/passphrases.json` (keep
+  `log_token`, so TOKENS stays valid) and run `update.py`. Anyone with the page open must log out and
+  log in again with the new one.
 * `state/people.csv` is the master list (ID ↔ phone ↔ enumerator), backed up on every
   run. Do not edit IDs by hand.
