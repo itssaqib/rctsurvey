@@ -26,6 +26,10 @@
    * **🔥 High priority** (orange tag, top of every list) marks two kinds of people. The first are people whose
      2-week survey closes in 3 days or less: contact them today. The second are people whose 2-week was missed
      but who have answered you before: make sure they complete the 4-week. Call them, don't just send a message.
+   * In the tag menu (*All tags*), the group **Compliance — all 3 surveys** sorts your people by survey:
+     main survey with full or partial compliance, then 2-week done and 4-week done, each with full or partial
+     compliance. The number after each entry is how many people it lists. Pick one to see all of them,
+     whatever tab is open. Tap a tab to go back.
 4. "Do not contact" or "do not send the main link again" means exactly that.
 5. You only see your own participants. Never share the passphrase, screenshots of the
    list, or numbers with anyone. The list is updated by the research team every day.
@@ -48,6 +52,7 @@
    * نام سے پہلے لکھا نمبر **ترجیح** ہے، اسے دبا کر مطلب دیکھیں۔ **1** = مرکزی سروے مکمل اور ویڈیو 3 منٹ یا زیادہ دیکھی۔ **2** = مرکزی سروے 80–99٪ اور ویڈیو 3 منٹ یا زیادہ دیکھی۔ **3** = مکمل، ویڈیو 3 منٹ سے کم دیکھی۔ **4** = 80–99٪، ویڈیو 3 منٹ سے کم دیکھی۔ پہلے 1، پھر 2، 3، 4 — لیکن رابطہ سب سے کریں۔ *More… → ترجیح 1* صرف وہی لوگ دکھاتا ہے۔
    * **✓ فالو اپ مکمل** میں وہ لوگ ہیں جن کا 4 ہفتے والا سروے مکمل ہو گیا ہے (2 ہفتے والا ہوا ہو یا نہیں)۔ ان کا کام ختم ہے، اس لیے وہ آپ کی باقی فہرستوں میں نظر نہیں آتے۔ سرچ انہیں پھر بھی ڈھونڈ لیتی ہے، مثلاً اگر وہ ادائیگی کا پوچھیں۔
    * **🔥 اعلیٰ ترجیح** (نارنجی ٹیگ، ہر فہرست میں سب سے اوپر) دو طرح کے لوگوں پر لگتا ہے۔ پہلے وہ جن کا 2 ہفتے والا سروے 3 دن یا اس سے کم میں بند ہو جائے گا: ان سے آج ہی رابطہ کریں۔ دوسرے وہ جن کا 2 ہفتے والا رہ گیا لیکن انہوں نے پہلے آپ کو جواب دیا تھا: یقینی بنائیں کہ وہ 4 ہفتے والا مکمل کریں۔ صرف پیغام نہ بھیجیں، کال کریں۔
+   * ٹیگ مینو (*تمام ٹیگ*) میں **شرکت — تینوں سروے** آپ کے لوگوں کو سروے کے حساب سے دکھاتا ہے: مرکزی سروے میں مکمل یا جزوی شرکت، پھر 2 ہفتے اور 4 ہفتے والا سروے مکمل، ہر ایک مکمل یا جزوی شرکت کے ساتھ۔ ہر ایک کے ساتھ لکھا نمبر بتاتا ہے کہ اس میں کتنے لوگ ہیں۔ ایک منتخب کریں تو وہ سب نظر آئیں گے، چاہے کوئی بھی ٹیب کھلا ہو۔ واپس جانے کے لیے کوئی ٹیب دبائیں۔
 4. "رابطہ نہ کریں" یا "مرکزی لنک دوبارہ نہ بھیجیں" کا مطلب یہی ہے — ان سے رابطہ نہ کریں۔
 5. آپ صرف اپنے شرکاء دیکھ سکتے ہیں۔ پاس فریز، فہرست کا اسکرین شاٹ یا نمبر کسی کو نہ دیں۔ فہرست روزانہ ریسرچ ٹیم اپ ڈیٹ کرتی ہے۔
 6. کسی کو بھی ڈھونڈنے کے لیے، مثلاً جو سروے مکمل کرنے کے بعد دوبارہ کال یا میسج کرے، سرچ باکس میں اس کا نام، آئی ڈی یا نمبر لکھیں۔ تلاش آپ کے تمام شرکاء میں ہوتی ہے، چاہے کوئی بھی ٹیب کھلا ہو۔ نمبر کسی بھی طرح لکھ سکتے ہیں (0345-… یا ‎+92 345 …)۔

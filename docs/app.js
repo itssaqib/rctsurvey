@@ -43,6 +43,7 @@ const T = {
     roundMain: "Main survey", round2: "2-week follow-up", round4: "4-week follow-up",
     of: "of", moreFilters: "More…",
     full: "Full compliance", partial: "Partial compliance",
+    compTags: "Compliance — all 3 surveys", compAll: "everyone with this compliance (all tabs)",
     pay2: "2-week payment", pay4: "4-week payment", paid: "Paid", payDue: "Due", markPaid: "Mark as paid",
     method: "Method", payNumber: "Account number", amount: "Amount (PKR)", reference: "Transaction ID / reference",
     stat_pay2due: "2-week payments due", stat_pay4due: "4-week payments due",
@@ -77,6 +78,7 @@ const T = {
     roundMain: "مرکزی سروے", round2: "2 ہفتے کا فالو اپ", round4: "4 ہفتے کا فالو اپ",
     of: "میں سے", moreFilters: "مزید…",
     full: "مکمل شرکت", partial: "جزوی شرکت",
+    compTags: "شرکت — تینوں سروے", compAll: "اس شرکت والے سب لوگ (تمام ٹیب)",
     pay2: "2 ہفتے کی ادائیگی", pay4: "4 ہفتے کی ادائیگی", paid: "ادا ہو گئی", payDue: "باقی", markPaid: "ادائیگی درج کریں",
     method: "طریقہ", payNumber: "اکاؤنٹ نمبر", amount: "رقم (روپے)", reference: "ٹرانزیکشن آئی ڈی",
     stat_pay2due: "2 ہفتے کی ادائیگیاں باقی", stat_pay4due: "4 ہفتے کی ادائیگیاں باقی",
@@ -231,6 +233,20 @@ const MORE = [
   ["dnc", (p) => p.action === "do_not_contact", "Do not contact", "رابطہ نہ کریں"],
   ...[1, 2, 3, 4].map((k) => [`prio${k}`, (p) => p.priority === k, `Priority ${k}`, `ترجیح ${k}`]),
 ];
+/* compliance in each of the three surveys (team request, 21 Nov), the same people the progress panel counts:
+   main survey: full = finished it, partial = saw a video but did not finish; 2-week and 4-week: that main-survey
+   compliance and the follow-up done. They sit in the tag menu with their counts; picked there, they list everyone
+   who matches (finished people too), whatever tab was open. */
+const COMP = [
+  ["c_main_full", (p) => p.compliance === "full", "Main survey: full compliance", "مرکزی سروے: مکمل شرکت"],
+  ["c_main_partial", (p) => p.compliance === "partial", "Main survey: partial compliance", "مرکزی سروے: جزوی شرکت"],
+  ["c_fu2_full", (p) => p.compliance === "full" && p.fu2_status === "done", "2-week: full compliance", "2 ہفتے: مکمل شرکت"],
+  ["c_fu2_partial", (p) => p.compliance === "partial" && p.fu2_status === "done", "2-week: partial compliance", "2 ہفتے: جزوی شرکت"],
+  ["c_fu4_full", (p) => p.compliance === "full" && p.fu4_status === "done", "4-week: full compliance", "4 ہفتے: مکمل شرکت"],
+  ["c_fu4_partial", (p) => p.compliance === "partial" && p.fu4_status === "done", "4-week: partial compliance", "4 ہفتے: جزوی شرکت"],
+];
+const compOf = (k) => COMP.find((c) => c[0] === k)[1];
+const compTag = () => (isPay() ? null : COMP.find((c) => c[0] === $("#tagSel").value) || null);
 const PAY_TABS = [         /* "All due" first: 2-week and 4-week payments in one list (and one CSV) */
   ["paydue", payDue, "All due", "تمام باقی"],
   ["pay2due", (p) => p.pay2.status === "due", "2-week due (PKR 200)", "2 ہفتے باقی (200)"],
@@ -426,6 +442,10 @@ function fillSelects() {
   tagSel.innerHTML = ""; tagSel.hidden = isPay();
   tagSel.add(new Option(t("allTags"), ""));
   TAGS.forEach((r) => tagSel.add(new Option(lbl(r), r[0])));
+  const og = document.createElement("optgroup");          // compliance per survey: counts filled in by compCounts()
+  og.label = t("compTags");
+  COMP.forEach((c) => og.appendChild(new Option(lang === "ur" ? c[3] : c[2], c[0])));
+  tagSel.appendChild(og);
   enuSel.hidden = !many; enuSel.innerHTML = "";
   if (many) { enuSel.add(new Option(t("allEnus"), "")); D.enumerators.forEach((e) => enuSel.add(new Option(e, e))); }
   tagSel.value = keepTag; enuSel.value = keepEnu;
@@ -447,17 +467,24 @@ function base() {
   const e = $("#enuSel").value;
   return D.people.filter((p) => !e || p.enumerator === e);
 }
-function render() { renderProgress(); renderStats(); renderAdmin(); renderTabs(); renderList(); }
+function render() { compCounts(); renderProgress(); renderStats(); renderAdmin(); renderTabs(); renderList(); }
+/* the compliance tags show how many people (of the chosen enumerator) each one lists */
+function compCounts() {
+  if (isPay()) return;
+  const ps = base();
+  $("#tagSel").querySelectorAll("optgroup option").forEach((o) => {
+    const c = COMP.find((x) => x[0] === o.value);
+    o.textContent = `${lang === "ur" ? c[3] : c[2]} (${ps.filter(c[1]).length.toLocaleString()})`;
+  });
+}
 
-/* ---- progress to target: the same people through main, 2-week and 4-week ---- */
+/* ---- progress to target: the same people through main, 2-week and 4-week (counted as the compliance tags) ---- */
 function rounds(ps) {
-  const c = (f) => ps.filter(f).length;
+  const c = (k) => ps.filter(compOf(k)).length;
   return [
-    { key: "main", label: t("roundMain"), color: "var(--s1)", n: c((p) => p.compliance === "full"), extra: c((p) => p.compliance === "partial") },
-    { key: "fu2", label: t("round2"), color: "var(--s2)", n: c((p) => p.compliance === "full" && p.fu2_status === "done"),
-      extra: c((p) => p.compliance === "partial" && p.fu2_status === "done") },
-    { key: "fu4", label: t("round4"), color: "var(--s3)", n: c((p) => p.compliance === "full" && p.fu4_status === "done"),
-      extra: c((p) => p.compliance === "partial" && p.fu4_status === "done") },
+    { key: "main", label: t("roundMain"), color: "var(--s1)", n: c("c_main_full"), extra: c("c_main_partial") },
+    { key: "fu2", label: t("round2"), color: "var(--s2)", n: c("c_fu2_full"), extra: c("c_fu2_partial") },
+    { key: "fu4", label: t("round4"), color: "var(--s3)", n: c("c_fu4_full"), extra: c("c_fu4_partial") },
   ];
 }
 function renderProgress() {
@@ -599,14 +626,17 @@ function renderTabs() {
   const nLate = isPay() ? 0 : ps.filter(lateWave).length;
   $("#chips").innerHTML = list.map(([k, f, en, ur]) =>
     `<button class="tab ${filter === k ? "on" : ""}" role="tab" data-k="${k}">${lang === "ur" ? ur : en}<span class="k">${ps.filter(inList(k, f)).length}</span>${k === "followup" && nLate ? `<span class="k late" title="${t("late")}">⚠ ${nLate}</span>` : ""}</button>`).join("");
-  $("#chips").classList.toggle("searching", !!$("#search").value.trim());     // no tab looks picked while searching
+  // no tab looks picked while searching or while a compliance tag lists everyone
+  $("#chips").classList.toggle("searching", !!$("#search").value.trim() || !!compTag());
   $("#chips").querySelectorAll(".tab").forEach((b) => b.onclick = () => { pick(b.dataset.k); $("#moreSel").value = ""; render(); });
   const ms = $("#moreSel");
-  ms.classList.toggle("on", MORE.some((m) => m[0] === filter));
-  if (!isPay()) ms.value = MORE.some((m) => m[0] === filter) ? filter : "";
+  const moreOn = !compTag() && MORE.some((m) => m[0] === filter);
+  ms.classList.toggle("on", moreOn);
+  if (!isPay()) ms.value = moreOn ? filter : "";
 }
-/* picking a tab, tile or filter shows that list, so it clears the search (a search looks through everyone) */
-function pick(k) { filter = k; shown = PAGE; $("#search").value = ""; }
+/* picking a tab, tile or filter shows that list, so it clears the search (a search looks through everyone)
+   and a compliance tag (it lists everyone too) */
+function pick(k) { filter = k; shown = PAGE; $("#search").value = ""; if (compTag()) $("#tagSel").value = ""; }
 /* search: name, ID or any of the person's numbers, typed in any form (+92 345 2906335, 0345-2906335,
    Urdu digits). It looks through everyone, whatever tab or tag is selected: someone whose follow-up is
    done and who calls or messages again must still be found. */
@@ -630,10 +660,13 @@ function filtered() {
   const [k, f] = list.find((x) => x[0] === filter) || list[0];
   const q = $("#search").value.trim();
   const tag = isPay() ? "" : $("#tagSel").value;
+  const ct = compTag();
   const rank = { fu4: 0, fu2: 1, check_number: 1, main_remind: 2, main_restart: 2, main_invite: 3 };
   const hpRank = { fu2_closing: 0, fu2_missed: 1 };     // high priority first: the 2-week closing soonest on top
   // search also looks in the other login of a split pair (someone who wrote to the other WhatsApp number)
-  const ps = q ? [...base(), ...(D.pair_people || [])].filter((p) => matches(p, q)) : base().filter(inList(k, f))
+  const ps = q ? [...base(), ...(D.pair_people || [])].filter((p) => matches(p, q))
+    : ct ? base().filter(ct[1])                          // a compliance tag: everyone who matches, in any tab
+    : base().filter(inList(k, f))
     .filter((p) => !tag || (p.tags || []).includes(tag) || pending().some((l) => l.participant_id === p.pid && (l.tags || "").includes(tag)));
   return ps.sort(isPay()
       ? (a, b) => payOrder(a).localeCompare(payOrder(b)) || a.pid.localeCompare(b.pid)
@@ -689,7 +722,7 @@ function renderList() {
   const all = filtered();
   const items = all.slice(0, shown);
   $("#count").textContent = `${items.length.toLocaleString()} ${t("shown")} · ${all.length.toLocaleString()}` +
-    ($("#search").value.trim() ? ` · ${t("searchAll")}` : "");
+    ($("#search").value.trim() ? ` · ${t("searchAll")}` : compTag() ? ` · ${t("compAll")}` : "");
   $("#moreBtn").hidden = all.length <= shown;
   $("#list").innerHTML = items.map((p) => (isPay() ? payCard(p) : personCard(p))).join("");
   $("#list").querySelectorAll("[data-log]").forEach((b) => b.onclick = () => openLog(b.dataset.log));
@@ -833,7 +866,7 @@ function download(name, rows) {
 function exportCsv() {
   const cols = ["pid", "enumerator", "name", "phone", "district", "province", "main_status", "main_progress", "main_done",
     "compliance", "priority", "fu2_status", "fu2_progress", "fu2_due", "fu4_status", "fu4_progress", "fu4_due", "action", "next_call", "n_calls"];
-  download(`${D.code}_list_${today()}.csv`, [[...cols, "pay_2week", "pay_4week"],
+  download(`${D.code}_${(compTag() || ["list"])[0]}_${today()}.csv`, [[...cols, "pay_2week", "pay_4week"],
     ...filtered().map((p) => [...cols.map((c) => p[c]), (p.pay2 || {}).status, (p.pay4 || {}).status])]);
 }
 function exportPay() {

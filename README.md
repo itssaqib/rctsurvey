@@ -140,6 +140,20 @@ badge and border and sort to the top of every list, the 2-week closing soonest f
 tab lists them, and the ADMIN table counts them per enumerator. Why: 27% of 2-week windows that had closed
 by 14 Nov were missed, and 69% of 2-week completions came within 3 days of the due date.
 
+**Compliance tags (team request, 21 Nov).** The tag menu has a group, *Compliance — all 3 surveys*, with six
+entries, each followed by its count:
+- main survey: full compliance, partial compliance;
+- 2-week: full compliance, partial compliance;
+- 4-week: full compliance, partial compliance.
+
+For a follow-up, full (or partial) means full (or partial) compliance in the main survey with that follow-up
+done. These are the same people the progress bars count: the bar's number and its "+ n partial".
+
+Picking an entry lists everyone who matches, whatever tab was open, and finished people too. No tab looks
+picked, as during a search, and picking a tab clears the entry. *Download list (CSV)* then saves that list, as
+`<code>_c_fu2_full_<date>.csv` for example. ADMIN's counts follow the enumerator menu. The entries are
+`COMP` in `docs/app.js`, and `rounds()` (the progress bars) uses them too.
+
 **Search.** The search box (name, ID, or any of the person's numbers: contact, old, other or payment
 number) looks through all of the login's people, whatever tab or tag is selected, so someone whose
 follow-ups are done is still found when they call or message again. Numbers can be typed in any form
